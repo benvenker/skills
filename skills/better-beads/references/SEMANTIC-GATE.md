@@ -11,7 +11,7 @@ br list --json > /tmp/beads-list.json
 br dep cycles --json > /tmp/beads-cycles.json
 bv --robot-plan > /tmp/bv-plan.json
 bv --robot-insights > /tmp/bv-insights.json
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py --json > /tmp/bead-quality-gate.json
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py --json > /tmp/bead-quality-gate.json
 ```
 
 ## Judge prompt

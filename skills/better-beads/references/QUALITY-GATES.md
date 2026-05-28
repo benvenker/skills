@@ -9,13 +9,13 @@ Prompts alone are not enough. Use gates to catch bad Beads before they become co
 Low-level script:
 
 ```bash
-.agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py
+.agents/skills/better-beads/scripts/bead_quality_gate.py
 ```
 
 Shell orchestrator loop:
 
 ```bash
-.agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh
+.agents/skills/better-beads/scripts/bead_gate_loop.sh
 ```
 
 The shell loop follows the same pattern as `swarm lint`: shell owns orchestration, Python owns deterministic checks, artifacts are written to a temp directory, and failures produce a concrete “fix this and rerun” prompt.
@@ -61,53 +61,53 @@ Do not put mandatory network/LLM calls in normal pre-commit hooks. Keep semantic
 Lint all active beads:
 
 ```bash
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py
 ```
 
 Run the full shell gate on staged bead changes. Default recommendation for normal pre-commit is error-only: block true contract failures, not every taste warning.
 
 ```bash
-.agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh --changed-staged
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged
 ```
 
 Dedicated polish pass or new-graph review:
 
 ```bash
-.agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh --changed-staged --strict
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged --strict
 ```
 
 Lint only staged bead changes with the low-level Python helper:
 
 ```bash
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py \
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --changed-only --staged --fail-on error
 ```
 
 Fail on warnings too, useful for a dedicated polish pass. `--strict` is an alias for `--fail-on warning`:
 
 ```bash
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py \
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --changed-only --staged --strict
 ```
 
 Lint one bead:
 
 ```bash
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py \
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --id <bead-id>
 ```
 
 Emit JSON for agent/CI parsing:
 
 ```bash
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py \
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --changed-only --staged --json
 ```
 
 Emit a human-readable audit report for lane rescue or skill learning:
 
 ```bash
-python3 .agents/skills/beads-authoring-excellence/scripts/bead_quality_gate.py \
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --label pr-01 \
   --include-closed \
   --report markdown \
@@ -124,8 +124,8 @@ Use this after `br sync --flush-only` and after staging `.beads/`.
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -d .beads ] && [ -x .agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh ]; then
-  .agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh --changed-staged
+if [ -d .beads ] && [ -x .agents/skills/better-beads/scripts/bead_gate_loop.sh ]; then
+  .agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged
 fi
 ```
 

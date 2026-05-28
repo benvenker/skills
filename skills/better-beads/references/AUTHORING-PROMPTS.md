@@ -10,7 +10,7 @@ behavior, observable success criteria, verification approach, failure behavior,
 and current anchors/surfaces/contracts/key fields. If you have not done that,
 do not claim the graph is excellent.
 
-Read the Beads Authoring Excellence references first:
+Read the Better Beads references first:
 - GOOD-BEAD-EXAMPLES.md
 - FAILURE-MODES.md
 - QUALITY-RUBRIC.md

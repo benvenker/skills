@@ -1,4 +1,4 @@
-# Beads Authoring Excellence References
+# Better Beads References
 
 Use these files before creating or polishing Beads. The top-level `SKILL.md` is intentionally short; the taste and examples live here.
 

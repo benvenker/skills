@@ -1,9 +1,9 @@
 ---
-name: beads-authoring-excellence
-description: "Write, review, and polish excellent Beads task graphs. Use when converting plans/PRDs into beads, reviewing bead quality, fixing bad bead graphs, or preparing beads for multi-agent implementation. This skill is reference-driven: read the examples and failure modes before authoring."
+name: better-beads
+description: "Write, review, and polish better Beads task graphs. Use when converting plans/PRDs into beads, reviewing bead quality, fixing bad bead graphs, or preparing beads for multi-agent implementation. This skill is reference-driven: read the examples and failure modes before authoring."
 ---
 
-# Beads Authoring Excellence
+# Better Beads
 
 A bead is a **behavioral execution contract for a fungible coding agent**.
 
@@ -114,7 +114,7 @@ After creation or mutation, run:
 br dep cycles --json
 bv --robot-insights
 bv --robot-plan
-.agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh --changed-staged
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged
 ```
 
 Use `--strict` for dedicated bead-polish passes, new-graph review, or when a repo explicitly wants warnings to block.
@@ -131,7 +131,7 @@ Check that:
 ## Fast authoring prompt
 
 ```text
-Use beads-authoring-excellence. Read the references first, especially
+Use better-beads. Read the references first, especially
 GOOD-BEAD-EXAMPLES.md, FAILURE-MODES.md, and QUALITY-RUBRIC.md.
 
 Create or polish Beads as behavioral execution contracts for fungible coding agents.

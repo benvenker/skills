@@ -186,7 +186,7 @@ else:
     lines.append("No bv plan summary available.")
 
 lines.append("\n## Rerun command\n")
-rerun = [".agents/skills/beads-authoring-excellence/scripts/bead_gate_loop.sh"]
+rerun = [".agents/skills/better-beads/scripts/bead_gate_loop.sh"]
 if mode == "all":
     rerun.append("--all")
 elif mode == "changed-since":
