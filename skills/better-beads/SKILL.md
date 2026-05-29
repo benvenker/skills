@@ -48,6 +48,7 @@ Before creating or polishing beads, read:
 
 Use `references/AUTHORING-PROMPTS.md` for copy-pasteable prompts.
 Use `references/PLAN-REVIEW-EXAMPLE.md` when reviewing a plausible but underpowered plan.
+Use `references/POLISHING-CASE-STUDIES.md` when repeated polish or quality-gate warnings might require graph changes instead of wording changes.
 Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
 
 ## Core operating rules
@@ -76,6 +77,10 @@ Repeated polish rounds should improve the execution graph, not endlessly reword 
   - **Contract detail** for the same outcome: add it to success criteria, failure behavior, validation, anchors, or non-goals.
   - **New independent behavior**: create or split into a bead only when it has its own observable outcome and reviewable PR/commit.
 - Do not split because a bead became detailed. Split because two implementation outcomes can land, be reviewed, and be verified independently.
+- When `long-child-contract` or a similar size warning fires, run the split
+  test before compacting prose. If the length is caused by a separate observable
+  behavior, create/split the bead and update dependencies, parent order, and
+  `ready-for-agent` labels.
 - Once a bead is strict-clean and fresh review finds only wording/readability changes, rotate to adjacent beads or graph-level review.
 - Stop or rotate after two fresh passes that produce no new behavior, tests, failure cases, dependency edges, split/merge decisions, or labels.
 - Keep the true frontier clear: polish blocked follow-ups, but reserve `ready-for-agent` for beads whose prerequisites and contracts are settled.

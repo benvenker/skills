@@ -299,7 +299,7 @@ def lint_issue(issue: dict[str, Any], repo: Path, status_by_id: dict[str, str]) 
     parent_issue = is_parent(issue)
     if not parent_issue:
         if len(desc) > 3500:
-            add("warning", "long-child-contract", "child bead is over 3500 chars; tighten or split unless every section prevents a concrete failure")
+            add("warning", "long-child-contract", "child bead is over 3500 chars; split-test first, then tighten if every section supports the same outcome")
         if len(hs) > 11:
             add("warning", "too-many-child-sections", f"child bead has {len(hs)} sections; merge overlapping sections for agent readability")
         if len(desc.split()) > 850:

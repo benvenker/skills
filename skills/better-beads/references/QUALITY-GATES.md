@@ -38,7 +38,7 @@ It also reports advisory taste debt:
 - prose walls and long lines that render badly in `bv`,
 - generic validation only,
 - inline commands instead of fenced bash blocks,
-- overlong child contracts,
+- overlong child contracts that need split-testing before prose compaction,
 - over-prescriptive test instructions,
 - obvious weak phrases like “manual smoke is acceptable” or “or document alternate.”
 
@@ -144,6 +144,23 @@ bead_gate_loop.sh --changed-staged --strict
 ```
 
 For small/new repos where the graph is intentionally kept clean, consider `--all --strict` as an explicit project choice, not the default.
+
+## Long-child warning triage
+
+When `long-child-contract` fires, do not immediately shorten the bead. First
+run the semantic split test:
+
+- If the length comes from an independently observable behavior, failure
+  contract, data contract, runtime surface, or dependency edge, split/create a
+  bead and update parent ordering, dependency edges, and `ready-for-agent`
+  labels.
+- If the length comes from repeated rationale, long inline lists, or overlapping
+  sections for the same outcome, compact for BV readability.
+
+The warning is advisory because some high-risk child beads need extra contract
+detail. It is still useful because it forces a graph-shape decision before a
+prose-polish decision.
+
 ## Important limitation
 
 The deterministic gate catches obvious smells. Passing it does **not** prove the bead is good.

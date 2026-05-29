@@ -11,6 +11,7 @@ Use these files before creating or polishing Beads. The top-level `SKILL.md` is 
 5. `QUALITY-GATES.md` — deterministic lint gate and hook/CI guidance.
 6. `AUTHORING-PROMPTS.md` — prompts for creating, reviewing, and polishing Beads.
 7. `PLAN-REVIEW-EXAMPLE.md` — example critique of a plausible but underpowered plan.
+8. `POLISHING-CASE-STUDIES.md` — field examples of when polish should change the graph instead of only the prose.
 
 ## Minimum context rule
 
