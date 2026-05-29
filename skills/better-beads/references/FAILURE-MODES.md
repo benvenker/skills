@@ -147,3 +147,21 @@ Fix:
 - Keep only constraints that change behavior.
 - Move reusable rationale to the parent or design doc.
 - Use deterministic gates for must-haves and semantic review for taste.
+
+## 11. Polish treadmill and split anxiety
+
+Symptoms:
+
+- Every fresh polish pass finds more details, so the agent keeps reworking the same bead indefinitely.
+- The agent wants to split a bead mainly because it is long or test-heavy.
+- Contract details, failure cases, smoke checks, and anchors get mistaken for separate work items.
+- The graph churns without creating new behavior, dependency edges, labels, or implementation order clarity.
+
+Fix:
+
+- Classify each new finding before mutating:
+  - Is this needed to implement or verify the same outcome? Keep it inside that bead.
+  - Does it create a separate observable product/system truth? Split it or create a follow-up bead.
+- Rotate after a bead is strict-clean and fresh review finds only wording or readability changes.
+- Use a stop/rotate rule: two fresh passes with no new behavior, test obligation, failure mode, dependency edge, split/merge decision, or label means move to the next bead or graph-level review.
+- Preserve comprehensive tests inside the behavior bead they prove. Do not split tests into standalone checklist beads.

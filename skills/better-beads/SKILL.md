@@ -68,6 +68,18 @@ Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bea
 - Do not shrink beads by saying “write fewer tests.” Keep the test intent and split the behavior under test.
 - Preserve final product and architecture decisions; discard dead intermediate debate.
 
+## Polishing loop discipline
+
+Repeated polish rounds should improve the execution graph, not endlessly reword one bead.
+
+- Treat new findings as one of two things:
+  - **Contract detail** for the same outcome: add it to success criteria, failure behavior, validation, anchors, or non-goals.
+  - **New independent behavior**: create or split into a bead only when it has its own observable outcome and reviewable PR/commit.
+- Do not split because a bead became detailed. Split because two implementation outcomes can land, be reviewed, and be verified independently.
+- Once a bead is strict-clean and fresh review finds only wording/readability changes, rotate to adjacent beads or graph-level review.
+- Stop or rotate after two fresh passes that produce no new behavior, tests, failure cases, dependency edges, split/merge decisions, or labels.
+- Keep the true frontier clear: polish blocked follow-ups, but reserve `ready-for-agent` for beads whose prerequisites and contracts are settled.
+
 ## Reviewability budget
 
 Use this as a taste gate during creation and polish. Consider splitting a child bead when it combines two or more high-diff-risk dimensions:
