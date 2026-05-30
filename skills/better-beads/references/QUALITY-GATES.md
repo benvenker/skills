@@ -56,6 +56,24 @@ Use an LLM/human review for judgment calls:
 
 Do not put mandatory network/LLM calls in normal pre-commit hooks. Keep semantic review explicit or CI/advisory.
 
+### 3. Closeout truth gate
+
+Implementation and swarm runs need a different guard: make sure no completed or
+abandoned work remains parked in `in_progress`.
+
+```bash
+.agents/skills/better-beads/scripts/bead_closeout_guard.sh
+```
+
+Run it after implementation panes finish, in operator closeout loops, or as a
+local hook before reporting a swarm as done. The guard is intentionally not a
+blind auto-close mechanism. It fails loudly and tells the operator to make each
+bead truthful:
+
+- close completed work with evidence,
+- reopen incomplete work that can continue later,
+- mark genuinely blocked work as blocked with the exact blocker.
+
 ## Recommended commands
 
 Lint all active beads:
@@ -116,6 +134,18 @@ python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
 
 The report summarizes worst beads, recurring failure modes, ready/not-ready verdict, and suggested rewrite order so agents do not need to spelunk raw JSON.
 
+Check for forgotten in-progress beads after implementation:
+
+```bash
+.agents/skills/better-beads/scripts/bead_closeout_guard.sh
+```
+
+Allow a known still-running bead while failing any other stale in-progress work:
+
+```bash
+.agents/skills/better-beads/scripts/bead_closeout_guard.sh --allow bd-123
+```
+
 ## Pre-commit hook example
 
 Use this after `br sync --flush-only` and after staging `.beads/`.
@@ -126,6 +156,20 @@ set -euo pipefail
 
 if [ -d .beads ] && [ -x .agents/skills/better-beads/scripts/bead_gate_loop.sh ]; then
   .agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged
+fi
+```
+
+## Closeout hook example
+
+Use this in swarm/operator closeout scripts, or as a local pre-push guard when a
+repo wants to prevent forgotten in-progress beads from leaving the machine.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -d .beads ] && [ -x .agents/skills/better-beads/scripts/bead_closeout_guard.sh ]; then
+  .agents/skills/better-beads/scripts/bead_closeout_guard.sh
 fi
 ```
 

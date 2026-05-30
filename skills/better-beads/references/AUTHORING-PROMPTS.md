@@ -97,10 +97,43 @@ End with the graph shape you would actually create.
 ## Closure evidence prompt
 
 ```text
-Before closing the bead, add a short comment or close reason with:
+Before ending implementation work, make Beads state truthful automatically.
+
+If validation passed and the bead contract is satisfied, close the bead yourself
+unless the user explicitly reserved closure for the operator. Do not leave
+completed work in `in_progress`.
+
+Close the bead with a short comment or close reason with:
 - what changed
 - exact verification commands run
 - test/smoke result summary
 - commit SHA or artifact path if available
 - any deferred or rejected follow-up captured as another bead
+
+If the bead is not complete, do not leave it parked in `in_progress`: reopen it
+with the remaining work, or mark it blocked with the exact blocker and evidence.
+
+After close/reopen/block, run:
+- br sync --flush-only
+- .agents/skills/better-beads/scripts/bead_closeout_guard.sh
+```
+
+## Operator closeout sweep
+
+```text
+Run an automatic Beads closeout sweep before ending this swarm/operator turn.
+
+Inspect every in-progress bead with `br list --json` and `br show <id> --json`.
+For each bead:
+- If implementation and validation evidence satisfies the closure contract,
+  close it with evidence.
+- If the required artifact or behavior is missing but the work can continue
+  later, reopen it with a concise reason.
+- If it is genuinely blocked, mark it blocked and record the exact blocker.
+
+Then run:
+- br sync --flush-only
+- .agents/skills/better-beads/scripts/bead_closeout_guard.sh
+
+Do not report the swarm as complete while unexpected `in_progress` beads remain.
 ```

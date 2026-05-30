@@ -50,6 +50,9 @@ Use `references/AUTHORING-PROMPTS.md` for copy-pasteable prompts.
 Use `references/PLAN-REVIEW-EXAMPLE.md` when reviewing a plausible but underpowered plan.
 Use `references/POLISHING-CASE-STUDIES.md` when repeated polish or quality-gate warnings might require graph changes instead of wording changes.
 Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
+Use `scripts/bead_closeout_guard.sh` at the end of implementation swarms,
+operator ticks, or hooks so completed work cannot silently remain
+`in_progress`.
 
 ## Core operating rules
 
@@ -68,6 +71,27 @@ Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bea
 - Split large work by reviewable behavior atoms: characterization, data/DTO contract, service behavior, one runtime route/surface, parity/docs, or final closeout.
 - Do not shrink beads by saying “write fewer tests.” Keep the test intent and split the behavior under test.
 - Preserve final product and architecture decisions; discard dead intermediate debate.
+
+## Automatic implementation closeout
+
+Bead state must converge automatically with implementation reality. A finished
+implementation pane should not leave the operator to remember bookkeeping.
+
+- Dispatch prompts for implementation agents should permit the agent to close
+  its assigned bead after validation succeeds, unless the user explicitly
+  requires operator-only closure.
+- If agents are told not to close beads, the operator prompt must include a
+  mandatory closeout sweep before ending the turn.
+- Close completed beads with evidence: behavior changed, validation commands and
+  results, commit SHA or note that changes remain uncommitted, and deferred
+  follow-ups.
+- Do not leave a bead `in_progress` as a parking state. If work stopped without
+  meeting the closure contract, reopen it with a reason or mark it blocked with
+  the exact blocker.
+- Run `scripts/bead_closeout_guard.sh` after a swarm/operator pass. It should
+  fail the closeout if any unexpected `in_progress` beads remain.
+- If a parent closure depends on children, close/reopen the child truth first;
+  then let the parent reflect the child graph.
 
 ## Polishing loop discipline
 
@@ -132,6 +156,7 @@ br dep cycles --json
 bv --robot-insights
 bv --robot-plan
 .agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged
+.agents/skills/better-beads/scripts/bead_closeout_guard.sh
 ```
 
 Use `--strict` for dedicated bead-polish passes, new-graph review, or when a repo explicitly wants warnings to block.
@@ -144,6 +169,7 @@ Check that:
 - single-owner surfaces are called out,
 - parallel tracks will not fight over the same files,
 - each child bead is reviewable without weakening tests or creating checklist sludge.
+- no completed or abandoned implementation bead is stuck in `in_progress`.
 
 ## Fast authoring prompt
 
@@ -168,4 +194,9 @@ long paragraphs, fenced commands where helpful, grouped anchors/surfaces, and co
 
 Use br for mutations and br --json / bv --robot-* for inspection. Validate with
 br dep cycles --json, bv --robot-insights, and bv --robot-plan.
+
+For implementation dispatch, make closeout automatic: the owning agent should
+close its bead with evidence after validation passes. If closure is reserved for
+the operator, run a mandatory closeout sweep and `bead_closeout_guard.sh` before
+ending the turn; close completed beads and reopen or block incomplete ones.
 ```

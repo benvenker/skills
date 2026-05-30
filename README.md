@@ -10,6 +10,12 @@ Better Beads helps create and polish Beads task graphs as behavioral execution c
 
 Use it when converting plans or PRDs into Beads, reviewing an existing Beads graph, or tightening tasks before multi-agent implementation.
 
+It also includes closeout helpers so implementation swarms do not leave
+completed work stuck in `in_progress`. Use
+`skills/better-beads/scripts/bead_closeout_guard.sh` from swarm/operator
+closeout hooks to fail loudly until each in-progress bead is closed, reopened,
+or marked blocked with evidence.
+
 ## Install
 
 List available skills:
