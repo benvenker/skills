@@ -1,4 +1,4 @@
-# Ben Venker Skills
+# Agent Skills
 
 Agent skills I use for planning, reviewing, and shipping software with AI coding agents.
 
