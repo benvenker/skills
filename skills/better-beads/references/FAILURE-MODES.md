@@ -1,5 +1,20 @@
 # Failure Modes: Bead Plans That Look Good But Fail
 
+## 0. Skipped operator routing
+
+Symptoms:
+
+- The agent creates beads without inspecting existing graph state.
+- The agent uses a raw plan as if it were already dispatch-ready.
+- The agent runs a staged hook check and calls it implementation-dispatch authority.
+- Relevant beads already exist, but duplicates are created because IDs/labels/parents were not inspected.
+
+Fix:
+
+- Start with the operator router in `AUTHORING-PROMPTS.md`.
+- Choose `create-from-raw-plan`, `improve-plan-first`, `polish-existing-graph`, or `closeout` before mutation.
+- Use `bead_gate_loop.sh --operator-dispatch` before implementation agents consume the graph.
+
 ## 1. Checklist sludge
 
 Symptoms:
@@ -13,7 +28,34 @@ Fix:
 - Merge checklist crumbs into PR-sized outcomes.
 - Use child beads only when each child can close with a coherent result.
 
-## 2. Mega-beads
+## 2. Broad surface buckets
+
+Symptoms:
+
+- A child bead is named after a surface or module, such as "dashboard," "settings," "billing," or "admin page."
+- The bead covers multiple user states, data contracts, routes, error behaviors, or visual surfaces.
+- Success criteria are grouped by area instead of one independently testable functional behavior.
+
+Fix:
+
+- Convert the broad noun into a parent/epic closure contract when it represents a lane.
+- Split children by functional behavior, for example: filtered series render correctly, empty/error states are shown, export permissions fail closed.
+- Keep one child only when every section proves the same behavior.
+
+## 3. Detail buckets
+
+Symptoms:
+
+- Child beads are “add tests,” “wire UI,” “update docs,” “refactor helpers,” or “clean up.”
+- The bead is a work type, layer, or checklist detail rather than an observable outcome.
+- Closing the bead would not make a meaningful product/system truth independently true.
+
+Fix:
+
+- Merge detail buckets into the functional behavior bead they prove or enable.
+- Keep separate characterization/model/contract work only when it closes a real independent behavior or unblocks multiple dependents.
+
+## 4. Mega-beads
 
 Symptoms:
 
@@ -30,7 +72,7 @@ Fix:
 - Do not reduce tests to reduce PR size; move the relevant tests with the smaller behavior slice.
 - Use a parent closure bead plus child implementation beads.
 
-## 3. Rubric laundering
+## 5. Rubric laundering
 
 Symptoms:
 
@@ -43,7 +85,7 @@ Fix:
 - Apply hard caps from `QUALITY-RUBRIC.md`.
 - Do not score above 24/30 without concrete files, symbols, data contracts, failure modes, and verification commands.
 
-## 4. Validation theater
+## 6. Validation theater
 
 Symptoms:
 
@@ -60,7 +102,7 @@ Fix:
 - If no test runner exists, require adding a tiny smoke/verification script where practical.
 - Manual smoke must include exact steps and expected observations.
 
-## 5. Architecture amnesia
+## 7. Architecture amnesia
 
 Symptoms:
 
@@ -76,7 +118,7 @@ Fix:
 - Treat files/symbols as starting points for agent search, not as an edit script.
 - State final architecture decisions explicitly in parent and child beads.
 
-## 6. Data contract fog
+## 8. Data contract fog
 
 Symptoms:
 
@@ -90,7 +132,7 @@ Fix:
 - Define success, partial-success, and failure behavior.
 - Include validation and sanitization rules.
 
-## 7. False verticality
+## 9. False verticality
 
 Symptoms:
 
@@ -103,7 +145,7 @@ Fix:
 - Collapse adjacent UI/canvas/API work when only the combined slice is meaningful.
 - Keep foundation work separate only when it truly unblocks multiple consumers.
 
-## 8. Unsafe parallelism
+## 10. Unsafe parallelism
 
 Symptoms:
 
@@ -116,7 +158,21 @@ Fix:
 - Add dependency edges when parallel work would conflict.
 - Use file reservations in multi-agent implementation.
 
-## 9. Closure ambiguity
+## 11. Implementation-bucket parents
+
+Symptoms:
+
+- A parent bead reads like a large implementation task.
+- The parent has acceptance criteria but no addressable child order or closure contract.
+- Agents are expected to implement the parent directly instead of child beads.
+
+Fix:
+
+- Rewrite the parent as a closure/dependency contract.
+- Move implementation behavior into child beads that each close one independently verifiable functional behavior.
+- Do not close the parent until children are closed or explicitly closed as unnecessary with evidence.
+
+## 12. Closure ambiguity
 
 Symptoms:
 
@@ -132,7 +188,7 @@ Fix:
 - Children close with verification evidence.
 - Deferred/rejected work is closed or captured with a reason, not deleted.
 
-## 10. Prompt-template overfitting
+## 13. Prompt-template overfitting
 
 Symptoms:
 
@@ -148,7 +204,21 @@ Fix:
 - Move reusable rationale to the parent or design doc.
 - Use deterministic gates for must-haves and semantic review for taste.
 
-## 11. Polish treadmill and split anxiety
+## 14. Ignored operator split-review
+
+Symptoms:
+
+- `long-child-contract`, `too-many-child-sections`, or `large-child` fires in operator-dispatch mode.
+- The agent only compacts prose and reruns the gate without classifying graph shape.
+- `ready-for-agent` labels remain on unresolved mega-beads or broad/detail buckets.
+
+Fix:
+
+- Use the generated `split-review-required.md` artifact.
+- Classify each child as keep, split, convert-to-parent, merge, defer, or delete/close unnecessary.
+- Update dependencies, parent order, labels, and ready frontier before dispatch.
+
+## 15. Polish treadmill and split anxiety
 
 Symptoms:
 

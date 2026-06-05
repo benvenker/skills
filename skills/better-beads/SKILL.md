@@ -9,6 +9,31 @@ A bead is a **behavioral execution contract for a fungible coding agent**.
 
 Lead with intent: what outcome should become true, what success looks like, what must not happen, and how the behavior will be verified. Do not turn beads into implementation scripts or long compliance documents.
 
+## Workflow operator first
+
+Before writing, polishing, dispatching, or closing Beads, operate the workflow. Inspect the active graph, choose exactly one mode, gate the result, and only then mutate or dispatch.
+
+### Inspection-first router
+
+1. Inspect before mutation:
+   - Use `br --json` commands for Beads state, details, dependencies, labels, and status.
+   - Use `bv --robot-*` commands for graph plans, insights, and machine-readable inspection.
+   - Never run bare `bv`.
+   - Use `br` only for mutations after the selected mode permits mutation.
+2. Determine graph relevance:
+   - If the user provides explicit bead IDs or labels, treat those as the primary scope and inspect them directly.
+   - Otherwise inspect the active graph by title, labels, parents, dependencies, and the plan/request subject to decide whether relevant beads already exist.
+3. Route to one mode:
+   - `create-from-raw-plan`: no relevant beads exist, and the raw plan already passes pre-mutation readiness.
+   - `improve-plan-first`: the plan is raw, weak, under-grounded, or would make implementation agents invent behavior, data contracts, failure handling, or verification.
+   - `polish-existing-graph`: relevant beads exist and need split/merge/deepen/delete/defer, dependency, label, or closure-contract repair before implementation.
+   - `closeout`: implementation/operator work is ending, or `in_progress` beads need truth repair.
+4. Gate dispatch:
+   - Implementation agents must not use a graph until operator gates pass: graph relevance inspected, dependency cycles checked, ready labels verified, parent/child closure shape reviewed, semantic readiness accepted, and closeout state clean.
+   - Raw-plan mode may auto-create beads after readiness and gates pass; do not add a default human approval pause unless the user or repo policy asks for one.
+
+Use `references/AUTHORING-PROMPTS.md` for the executable mode procedure.
+
 ## Strong Agent Question Test
 
 Before calling a bead ready, ask:
@@ -46,10 +71,10 @@ Before creating or polishing beads, read:
 4. `references/QUALITY-RUBRIC.md`
 5. `references/BEAD-FORMATTING.md`
 
-Use `references/AUTHORING-PROMPTS.md` for copy-pasteable prompts.
+Use `references/AUTHORING-PROMPTS.md` for the operator-router prompt and mode procedures.
 Use `references/PLAN-REVIEW-EXAMPLE.md` when reviewing a plausible but underpowered plan.
 Use `references/POLISHING-CASE-STUDIES.md` when repeated polish or quality-gate warnings might require graph changes instead of wording changes.
-Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
+Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, operator dispatch, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
 Use `scripts/bead_closeout_guard.sh` at the end of implementation swarms,
 operator ticks, or hooks so completed work cannot silently remain
 `in_progress`.
@@ -147,28 +172,31 @@ Everything else is taste debt: exact file lists, length, prose walls, section co
 
 A bead with correct content but long prose walls is not finished either. It must be readable in `bv`, `br show`, tmux panes, and narrow agent terminals.
 
-## Minimal graph validation
+## Operator gates and minimal graph validation
 
-After creation or mutation, run:
+After creation or mutation, run the available local gates:
 
 ```bash
 br dep cycles --json
 bv --robot-insights
 bv --robot-plan
-.agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --operator-dispatch
 .agents/skills/better-beads/scripts/bead_closeout_guard.sh
 ```
 
-Use `--strict` for dedicated bead-polish passes, new-graph review, or when a repo explicitly wants warnings to block.
+Use `--changed-staged` for normal hooks and `--strict` for dedicated bead-polish passes, new-graph review, or when a repo explicitly wants warnings to block. For full operator dispatch, use `--operator-dispatch` and also perform the semantic review in `references/SEMANTIC-GATE.md` over all relevant active beads; the current staged hook check alone is not dispatch authority.
 
 Check that:
 
 - cycles are empty,
+- relevant existing beads were inspected before creating duplicates,
 - ready beads are genuinely ready and `ready-for-agent` labels are only on the actual frontier,
 - shared substrate lands before dependent vertical work,
 - single-owner surfaces are called out,
 - parallel tracks will not fight over the same files,
-- each child bead is reviewable without weakening tests or creating checklist sludge.
+- each child bead is one independently verifiable functional behavior, not a broad surface bucket, checklist bucket, or detail bucket,
+- parent beads are closure/dependency contracts whose children and order are addressable,
+- implementation agents would not need to invent behavior, data contracts, failure handling, or verification,
 - no completed or abandoned implementation bead is stuck in `in_progress`.
 
 ## Fast authoring prompt
@@ -193,7 +221,8 @@ Format bead descriptions for BV readability: short sections, bullets instead of
 long paragraphs, fenced commands where helpful, grouped anchors/surfaces, and compact contracts.
 
 Use br for mutations and br --json / bv --robot-* for inspection. Validate with
-br dep cycles --json, bv --robot-insights, and bv --robot-plan.
+br dep cycles --json, bv --robot-insights, bv --robot-plan, and
+bead_gate_loop.sh --operator-dispatch before implementation dispatch.
 
 For implementation dispatch, make closeout automatic: the owning agent should
 close its bead with evidence after validation passes. If closure is reserved for

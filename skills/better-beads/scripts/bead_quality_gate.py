@@ -96,6 +96,8 @@ class Finding:
     title: str
     code: str
     message: str
+    operator_blocking: bool = False
+    requires_split_review: bool = False
 
 
 def norm_heading(line: str) -> str | None:
@@ -282,15 +284,37 @@ def parent_section_names_child_ids(desc: str) -> bool:
     return bool(re.search(r"(?m)(`[^`]+`|\b[a-z0-9][a-z0-9_.-]{6,}\b)", body))
 
 
-def lint_issue(issue: dict[str, Any], repo: Path, status_by_id: dict[str, str]) -> list[Finding]:
+def lint_issue(
+    issue: dict[str, Any],
+    repo: Path,
+    status_by_id: dict[str, str],
+    operator_dispatch: bool = False,
+) -> list[Finding]:
     desc = issue.get("description") or ""
     issue_id = issue.get("id", "<unknown>")
     title = issue.get("title", "<untitled>")
     hs = headings(desc)
     findings: list[Finding] = []
 
-    def add(sev: str, code: str, msg: str) -> None:
-        findings.append(Finding(sev, issue_id, title, code, msg))
+    def add(
+        sev: str,
+        code: str,
+        msg: str,
+        *,
+        operator_blocking: bool = False,
+        requires_split_review: bool = False,
+    ) -> None:
+        findings.append(
+            Finding(
+                sev,
+                issue_id,
+                title,
+                code,
+                msg,
+                operator_blocking=operator_blocking,
+                requires_split_review=requires_split_review,
+            )
+        )
 
     if not desc.strip():
         add("error", "empty-description", "description is empty")
@@ -298,12 +322,17 @@ def lint_issue(issue: dict[str, Any], repo: Path, status_by_id: dict[str, str]) 
 
     parent_issue = is_parent(issue)
     if not parent_issue:
+        structural_severity = "error" if operator_dispatch else "warning"
+        structural_kwargs = {
+            "operator_blocking": operator_dispatch,
+            "requires_split_review": operator_dispatch,
+        }
         if len(desc) > 3500:
-            add("warning", "long-child-contract", "child bead is over 3500 chars; split-test first, then tighten if every section supports the same outcome")
+            add(structural_severity, "long-child-contract", "child bead is over 3500 chars; run split-review before dispatch, then tighten only if every section supports the same functional behavior", **structural_kwargs)
         if len(hs) > 11:
-            add("warning", "too-many-child-sections", f"child bead has {len(hs)} sections; merge overlapping sections for agent readability")
+            add(structural_severity, "too-many-child-sections", f"child bead has {len(hs)} sections; run split-review before dispatch and merge only overlapping same-behavior sections", **structural_kwargs)
         if len(desc.split()) > 850:
-            add("warning", "large-child", "child bead description is very large; consider split or tighten")
+            add(structural_severity, "large-child", "child bead description is very large; run split-review before dispatch", **structural_kwargs)
     elif len(desc) > 6500:
         add("warning", "large-parent", "parent bead is very large; move reusable context to child beads or external plan references")
 
@@ -382,25 +411,50 @@ def lint_issue(issue: dict[str, Any], repo: Path, status_by_id: dict[str, str]) 
     labels = set(issue.get("labels") or [])
     dep_count = issue.get("dependency_count")
     deps = issue.get("dependencies") or []
-    unresolved_deps = []
+    dependency_statuses: list[tuple[str, str]] = []
     for dep in deps:
         if not isinstance(dep, dict):
             continue
         dep_id = dep.get("id") or dep.get("depends_on_id")
-        dep_status = dep.get("status") or status_by_id.get(dep_id or "")
-        if dep_id and dep_status not in {"closed", "archived"}:
-            unresolved_deps.append(dep_id)
-    if "ready-for-agent" in labels and (
-        (isinstance(dep_count, int) and dep_count > 0) or unresolved_deps
-    ):
-        add("warning", "ready-label-blocked", "label ready-for-agent is present but bead has unresolved dependencies")
+        if not dep_id:
+            continue
+        dep_status = dep.get("status") or status_by_id.get(dep_id)
+        if dep_status:
+            dependency_statuses.append((dep_id, dep_status))
+
+    # Prefer detailed dependency/status information when available. Some br/BV
+    # outputs include dependency_count without defining whether it means total or
+    # unresolved dependencies; use it only as a legacy/no-detail fallback.
+    unresolved_deps = [
+        dep_id for dep_id, dep_status in dependency_statuses
+        if dep_status not in {"closed", "archived"}
+    ]
+    blocked_by_dependencies = bool(unresolved_deps) or (
+        not dependency_statuses and isinstance(dep_count, int) and dep_count > 0
+    )
+    if "ready-for-agent" in labels and blocked_by_dependencies:
+        severity = "error" if operator_dispatch else "warning"
+        add(
+            severity,
+            "ready-label-blocked",
+            "label ready-for-agent is present but bead has unresolved dependencies",
+            operator_blocking=operator_dispatch,
+            requires_split_review=False,
+        )
 
     return findings
 
 
-def render_markdown_report(repo: Path, issues: list[dict[str, Any]], findings: list[Finding], fail_on: str) -> str:
+def render_markdown_report(
+    repo: Path,
+    issues: list[dict[str, Any]],
+    findings: list[Finding],
+    fail_on: str,
+    operator_dispatch: bool = False,
+) -> str:
     errors = [f for f in findings if f.severity == "error"]
     warnings = [f for f in findings if f.severity == "warning"]
+    split_review = [f for f in findings if f.requires_split_review]
     by_id: dict[str, list[Finding]] = defaultdict(list)
     issue_by_id = {i.get("id", "<unknown>"): i for i in issues}
     for finding in findings:
@@ -429,7 +483,9 @@ def render_markdown_report(repo: Path, issues: list[dict[str, Any]], findings: l
     code_counts = Counter(f.code for f in findings)
     severity_code_counts = Counter((f.severity, f.code) for f in findings)
 
-    if errors:
+    if split_review:
+        verdict = "Not dispatch-ready: structural child findings require split-review."
+    elif errors:
         verdict = "Not swarm-ready: hard execution-contract errors remain."
     elif warnings:
         verdict = "Hook-safe but not strict-clean: only advisory warnings remain."
@@ -444,6 +500,8 @@ def render_markdown_report(repo: Path, issues: list[dict[str, Any]], findings: l
     lines.append(f"- Errors: `{len(errors)}`")
     lines.append(f"- Warnings: `{len(warnings)}`")
     lines.append(f"- Fail-on mode: `{fail_on}`")
+    lines.append(f"- Operator dispatch: `{operator_dispatch}`")
+    lines.append(f"- Split-review required: `{len(split_review)}`")
     lines.append(f"- Verdict: **{verdict}**")
     lines.append("")
 
@@ -482,6 +540,16 @@ def render_markdown_report(repo: Path, issues: list[dict[str, Any]], findings: l
             lines.append("")
     else:
         lines.append("No findings.")
+        lines.append("")
+
+    if split_review:
+        lines.append("## Operator split-review required")
+        lines.append("")
+        lines.append("Before implementation dispatch, classify each blocked child as keep, split, convert-to-parent, merge, defer, or close/delete unnecessary. Update dependency edges, parent order, and `ready-for-agent` labels if the graph changes.")
+        lines.append("")
+        for finding in split_review:
+            lines.append(f"- `{finding.issue_id}` `{finding.code}` — {finding.message}")
+            lines.append(f"  - {finding.title}")
         lines.append("")
 
     lines.append("## Suggested rewrite order")
@@ -524,6 +592,11 @@ def main() -> int:
     parser.add_argument("--changed-only", action="store_true", help="lint only beads changed in git diff")
     parser.add_argument("--staged", action="store_true", help="with --changed-only, inspect staged diff")
     parser.add_argument("--changed-since", help="with --changed-only, inspect diff since ref")
+    parser.add_argument(
+        "--operator-dispatch",
+        action="store_true",
+        help="pre-implementation dispatch mode: elevate structural child warnings into split-review blockers",
+    )
     args = parser.parse_args()
 
     if args.strict:
@@ -553,13 +626,15 @@ def main() -> int:
 
     findings: list[Finding] = []
     for issue in issues:
-        findings.extend(lint_issue(issue, repo, status_by_id))
+        findings.extend(lint_issue(issue, repo, status_by_id, operator_dispatch=args.operator_dispatch))
 
     errors = [f for f in findings if f.severity == "error"]
     warnings = [f for f in findings if f.severity == "warning"]
+    operator_blocking = [f for f in findings if f.operator_blocking]
+    split_review_required = [f for f in findings if f.requires_split_review]
 
     if args.report == "markdown":
-        print(render_markdown_report(repo, issues, findings, args.fail_on))
+        print(render_markdown_report(repo, issues, findings, args.fail_on, args.operator_dispatch))
     elif args.json:
         print(json.dumps({
             "repo": str(repo),
@@ -567,10 +642,15 @@ def main() -> int:
             "error_count": len(errors),
             "warning_count": len(warnings),
             "fail_on": args.fail_on,
+            "operator_dispatch": args.operator_dispatch,
+            "operator_blocking_count": len(operator_blocking),
+            "split_review_required_count": len(split_review_required),
             "findings": [asdict(f) for f in findings],
         }, indent=2))
     else:
         print(f"Bead quality gate: {len(issues)} active issue(s), {len(errors)} error(s), {len(warnings)} warning(s)")
+        if args.operator_dispatch:
+            print(f"Operator dispatch: {len(operator_blocking)} blocking finding(s), {len(split_review_required)} split-review finding(s)")
         for f in findings:
             print(f"[{f.severity.upper()}] {f.issue_id} {f.code}: {f.message}")
             print(f"        {f.title}")

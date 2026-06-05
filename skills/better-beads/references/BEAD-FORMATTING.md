@@ -249,6 +249,15 @@ Length is justified when it prevents a concrete failure: scope creep, wrong file
 
 Formatting and sizing are connected. If a child bead is likely to produce a large PR because it combines contract design, service implementation, access control, routing, and parity/docs, split it by behavior before polishing prose.
 
+A child bead should describe one independently testable functional behavior, not a broad surface bucket, checklist bucket, or detail bucket. A broad noun like “dashboard” usually belongs to a parent/epic closure contract; a behavior like “filtered load graphs render correct series and empty/error states” is closer to child-sized.
+
+When operator-dispatch writes `split-review-required.md`, write the repair evidence in the bead or close reason so another agent can act without the original conversation:
+
+- classification: keep, split, convert-to-parent, merge, defer, or delete/close unnecessary;
+- reason: why the current child is one behavior or how it was split;
+- graph updates: dependency edges, parent order, labels, and ready frontier;
+- verification: compact tests/smokes that prove each resulting child behavior.
+
 Do not solve oversized PRs by weakening test requirements. Instead, keep the tests close to the behavior atom they prove:
 
 - characterization tests with characterization beads;

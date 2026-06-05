@@ -11,7 +11,8 @@ br list --json > /tmp/beads-list.json
 br dep cycles --json > /tmp/beads-cycles.json
 bv --robot-plan > /tmp/bv-plan.json
 bv --robot-insights > /tmp/bv-insights.json
-python3 .agents/skills/better-beads/scripts/bead_quality_gate.py --json > /tmp/bead-quality-gate.json
+python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
+  --operator-dispatch --json --fail-on never > /tmp/bead-quality-gate.json
 ```
 
 ## Judge prompt
@@ -48,6 +49,11 @@ Review questions:
 11. Does the dependency graph reflect real implementation order?
 12. Are blocked beads mislabeled as ready?
 13. Would a fresh agent still have to invent behavior, contracts, failure handling, or verification?
+14. Was the correct operator mode chosen: `create-from-raw-plan`, `improve-plan-first`, `polish-existing-graph`, or `closeout`?
+15. Were relevant existing beads inspected before new beads were created or duplicated?
+16. Is each child one independently testable functional behavior, not a broad surface bucket, checklist bucket, or detail bucket?
+17. Are parent and epic beads closure/dependency contracts rather than disguised implementation buckets?
+18. If deterministic operator mode required split-review, was each bead classified as keep, split, convert-to-parent, merge, defer, or delete/close unnecessary?
 
 Return JSON only:
 
@@ -81,6 +87,9 @@ Return `block` if any of these are true:
 
 - A bead references a smoke script or verification artifact that does not exist and does not explicitly require creating it.
 - A bead contains multiple independent implementation levers without clear reason.
+- A child bead is a broad surface bucket such as an entire dashboard/screen/module rather than one behavior.
+- A child bead is a detail bucket or checklist bucket such as tests/docs/wiring/cleanup without an independently verifiable functional outcome.
+- A parent or epic contains implementation instructions instead of a closure/dependency contract.
 - A child bead has no observable outcome or success criteria.
 - A child bead would require the agent to design behavior, API/data contract, or failure handling from scratch.
 - The graph claims ready-for-agent while key architecture decisions or dependency blockers remain unresolved.
@@ -94,3 +103,4 @@ Return `block` if any of these are true:
 - Semantic gate verdict `block`: do not unleash agents.
 - Semantic gate `pass_with_warnings`: okay for one careful agent, not a swarm.
 - Semantic gate `pass`: okay for multi-agent implementation.
+- Any unresolved operator split-review artifact: do not dispatch, even if the reviewer expects the final outcome will be `keep`.

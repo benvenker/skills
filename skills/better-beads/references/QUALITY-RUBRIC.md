@@ -40,6 +40,9 @@ These caps prevent rubric laundering.
 - Max **24/30** if every child uses only generic validation like `pnpm build`.
 - Max **25/30** if dependencies are described in prose but not represented as explicit `br dep add` edges.
 - Max **26/30** if the bead is implementable but parallel safety is unknown for a multi-agent graph.
+- Max **23/30** if a child is a broad surface bucket such as an entire dashboard/screen/module rather than one functional behavior.
+- Max **23/30** if a child is a detail bucket such as tests/docs/wiring/cleanup without an independently verifiable functional outcome.
+- Max **24/30** if a parent/epic reads as an implementation bucket instead of a closure/dependency contract.
 - Max **26/30** if a child bead combines multiple high-diff-risk dimensions that could be reviewed as independent behavior atoms.
 - Max **27/30** if the bead dictates exact implementation/test mechanics when behavior-level constraints would suffice.
 
@@ -58,6 +61,8 @@ A bead at **28–30/30** should feel boringly executable and easy to scan in `bv
 
 ## Child implementation bead must answer
 
+A child bead is one high-level, independently verifiable functional behavior. It is not a broad surface bucket, checklist bucket, or detail bucket.
+
 - What behavior or system truth should become true?
 - What observable success criteria prove it?
 - What verification path should be used, ideally TDD/behavior-first?
@@ -74,6 +79,7 @@ A bead at **28–30/30** should feel boringly executable and easy to scan in `bv
 2. Try to start implementation mentally.
 3. Mark every place where you would have to invent behavior, success criteria, failure handling, contracts, anchors, or verification.
 4. Mark every child that combines multiple high-diff-risk dimensions: new module, data contract, security/access behavior, runtime route, response compatibility, parity/docs, or broad harness work.
-5. Apply hard caps before assigning a score.
-6. Check `BEAD-FORMATTING.md` for terminal/BV readability.
-7. Revise until the graph is behaviorally executable, reviewable, and scannable, not merely well-formatted.
+5. Mark every child that is named after a broad surface, layer, or work type instead of one functional behavior.
+6. Apply hard caps before assigning a score.
+7. Check `BEAD-FORMATTING.md` for terminal/BV readability.
+8. Revise until the graph is behaviorally executable, reviewable, and scannable, not merely well-formatted.

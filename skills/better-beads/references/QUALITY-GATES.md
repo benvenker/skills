@@ -29,12 +29,12 @@ This catches hard contract failures:
 - missing validation or verification detail,
 - missing failure behavior on implementation beads,
 - missing grounding in current anchors/surfaces/contracts/key fields,
-- parent beads without closure contracts or addressable children/order,
-- missing referenced smoke scripts,
-- `ready-for-agent` labels on beads with unresolved dependencies.
+- parent beads without closure contracts or addressable children/order.
 
-It also reports advisory taste debt:
+It also reports advisory taste debt and graph-frontier warnings:
 
+- missing referenced smoke scripts unless the bead explicitly says creating the script is in scope,
+- `ready-for-agent` labels on beads with unresolved dependencies in normal lint mode,
 - prose walls and long lines that render badly in `bv`,
 - generic validation only,
 - inline commands instead of fenced bash blocks,
@@ -44,7 +44,44 @@ It also reports advisory taste debt:
 
 It is dependency-free Python and safe for hooks.
 
-### 2. Semantic review gate
+### 2. Operator dispatch gate
+
+Use this before implementation agents consume a new or polished graph:
+
+```bash
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --operator-dispatch
+```
+
+This is stricter than the normal pre-commit hook. It checks all active beads by default, collects `br dep cycles --json`, `bv --robot-plan`, `bv --robot-insights`, deterministic findings, a dispatch verdict, and a split-review artifact when needed.
+
+Dispatch is blocked when:
+
+- inspection tooling exits nonzero,
+- inspection tooling emits malformed JSON,
+- inspection tooling emits valid JSON with the wrong top-level shape, such as an array instead of an object,
+- inspection tooling exits zero but emits a top-level JSON error envelope such as `{ "error": "..." }`,
+- dependency cycles are non-empty,
+- deterministic errors remain, including `ready-label-blocked` in operator-dispatch mode,
+- any deterministic finding is marked `operator_blocking`,
+- split-review findings remain.
+
+In operator-dispatch mode, structural child findings that are advisory in hook mode become dispatch blockers:
+
+- `long-child-contract`,
+- `too-many-child-sections`,
+- `large-child`.
+
+Those structural findings do not prove the bead is semantically wrong. They hard-trigger a split-review flow before implementation dispatch. By contrast, `ready-label-blocked` is an operator-dispatch blocker but not a split-review finding; remove the premature `ready-for-agent` label or close/reorder the unresolved dependency first.
+
+Accepted split-review outcomes:
+
+- keep one child with evidence that every section supports the same functional behavior;
+- split into child beads and update dependencies, parent order, and labels;
+- convert a broad bucket into a parent/epic closure contract;
+- merge checklist crumbs into one functional behavior bead;
+- defer, delete, or close unnecessary work with evidence.
+
+### 3. Semantic review gate
 
 Use an LLM/human review for judgment calls:
 
@@ -56,7 +93,7 @@ Use an LLM/human review for judgment calls:
 
 Do not put mandatory network/LLM calls in normal pre-commit hooks. Keep semantic review explicit or CI/advisory.
 
-### 3. Closeout truth gate
+### 4. Closeout truth gate
 
 Implementation and swarm runs need a different guard: make sure no completed or
 abandoned work remains parked in `in_progress`.
@@ -94,6 +131,14 @@ Dedicated polish pass or new-graph review:
 .agents/skills/better-beads/scripts/bead_gate_loop.sh --changed-staged --strict
 ```
 
+Pre-implementation operator dispatch over the active graph:
+
+```bash
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --operator-dispatch
+```
+
+Use `--operator-dispatch`, not a staged hook check, before handing beads to implementation agents.
+
 Lint only staged bead changes with the low-level Python helper:
 
 ```bash
@@ -122,6 +167,13 @@ python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --changed-only --staged --json
 ```
 
+Run deterministic gate tests after changing gate behavior:
+
+```bash
+python3 .agents/skills/better-beads/scripts/test_bead_quality_gate.py
+bash .agents/skills/better-beads/scripts/test_bead_gate_loop.sh
+```
+
 Emit a human-readable audit report for lane rescue or skill learning:
 
 ```bash
@@ -132,7 +184,7 @@ python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --fail-on never
 ```
 
-The report summarizes worst beads, recurring failure modes, ready/not-ready verdict, and suggested rewrite order so agents do not need to spelunk raw JSON.
+The report summarizes worst beads, recurring failure modes, ready/not-ready verdict, split-review requirements, and suggested rewrite order so agents do not need to spelunk raw JSON.
 
 Check for forgotten in-progress beads after implementation:
 
@@ -187,6 +239,20 @@ For deliberate bead-polish work, new graph review, or CI advisory jobs, use stri
 bead_gate_loop.sh --changed-staged --strict
 ```
 
+For implementation dispatch, use the operator gate:
+
+```bash
+bead_gate_loop.sh --operator-dispatch
+```
+
+The operator gate writes:
+
+- `bead-quality-gate.json` for deterministic findings,
+- `br-dep-cycles.json` for dependency cycle inspection,
+- `bv-robot-plan.json` and `bv-robot-insights.json`,
+- `split-review-required.md` when oversized/detail-heavy children need classification,
+- `dispatch-verdict.json` with `dispatch_allowed`, blocked reasons, `parse_failures`, `schema_failures`, `operator_blocking_count`, and `inspection_error_envelopes` for rc-0 JSON inspection errors.
+
 For small/new repos where the graph is intentionally kept clean, consider `--all --strict` as an explicit project choice, not the default.
 
 ## Long-child warning triage
@@ -201,12 +267,10 @@ run the semantic split test:
 - If the length comes from repeated rationale, long inline lists, or overlapping
   sections for the same outcome, compact for BV readability.
 
-The warning is advisory because some high-risk child beads need extra contract
-detail. It is still useful because it forces a graph-shape decision before a
-prose-polish decision.
+The warning is advisory in normal hook mode because some high-risk child beads need extra contract detail. In `--operator-dispatch` mode it blocks dispatch and writes a split-review artifact because implementation agents should not receive unresolved mega-beads, broad surface buckets, or detail buckets.
 
 ## Important limitation
 
 The deterministic gate catches obvious smells. Passing it does **not** prove the bead is good.
 
-A bead can pass the script and still be too large, too fuzzy, or architecturally wrong. Use the semantic review prompt from `AUTHORING-PROMPTS.md` before unleashing a swarm.
+A bead can pass the script and still be too large, too fuzzy, or architecturally wrong. Use `--operator-dispatch` plus the semantic review prompt from `SEMANTIC-GATE.md` before unleashing a swarm.
