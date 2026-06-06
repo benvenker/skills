@@ -8,11 +8,13 @@ It does not replace human/LLM semantic review.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
 import subprocess
 import sys
+import textwrap
 from collections import Counter, defaultdict
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -72,6 +74,27 @@ GENERIC_VALIDATION_ONLY = {
     "npm test",
     "pnpm test",
 }
+
+VERSION = "1.0.0"
+CONTRACT_VERSION = "2026-06-05"
+KNOWN_FLAGS = [
+    "--repo",
+    "--json",
+    "--report",
+    "--fail-on",
+    "--strict",
+    "--include-closed",
+    "--id",
+    "--label",
+    "--changed-only",
+    "--staged",
+    "--changed-since",
+    "--operator-dispatch",
+    "--version",
+    "--robot-help",
+    "-h",
+    "--help",
+]
 
 BAD_PHRASES = [
     "or document the exact alternate",
@@ -579,8 +602,141 @@ def render_markdown_report(
     return "\n".join(lines)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Lint Beads for execution-contract quality")
+def build_capabilities() -> dict[str, Any]:
+    return {
+        "tool": "bead_quality_gate.py",
+        "version": VERSION,
+        "contract_version": CONTRACT_VERSION,
+        "summary": "Deterministic Beads execution-contract quality gate.",
+        "stdout": "Human report or requested machine-readable JSON only.",
+        "stderr": "Diagnostics, usage errors, and tool failures only.",
+        "exit_codes": {
+            "0": "success; no blocking findings for the selected fail-on mode",
+            "1": "quality gate failed for the selected fail-on mode",
+            "2": "usage error, missing repository data, or upstream inspection failure",
+        },
+        "robot_surfaces": [
+            {"argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
+            {"argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"},
+            {"argv": ["--robot-help"], "stdout_schema": "markdown-guide-v1"},
+        ],
+        "options": [
+            {"flag": flag} for flag in KNOWN_FLAGS
+        ],
+        "examples": [
+            "python3 scripts/bead_quality_gate.py --repo . --json",
+            "python3 scripts/bead_quality_gate.py --repo . --report markdown --fail-on never",
+            "python3 scripts/bead_quality_gate.py --repo . --operator-dispatch --json",
+            "python3 scripts/bead_quality_gate.py capabilities --json",
+        ],
+    }
+
+
+def robot_docs() -> str:
+    return """# Better Beads quality gate robot guide
+
+Use `bead_quality_gate.py` when an agent needs deterministic, dependency-free
+checks over `.beads/issues.jsonl` descriptions.
+
+## First commands to try
+
+```bash
+python3 scripts/bead_quality_gate.py capabilities --json
+python3 scripts/bead_quality_gate.py --repo . --json
+python3 scripts/bead_quality_gate.py --repo . --report markdown --fail-on never
+python3 scripts/bead_quality_gate.py --repo . --operator-dispatch --json
+```
+
+## Output contract
+
+- JSON/report stdout is data only.
+- Usage errors and diagnostics go to stderr.
+- Exit `0` means the selected gate passed.
+- Exit `1` means deterministic findings failed the selected gate.
+- Exit `2` means invocation/tooling failed before quality scoring completed.
+
+## Agent workflow
+
+1. Run `capabilities --json` to inspect flags and exit codes.
+2. Run `--json` for automation or `--report markdown --fail-on never` for repair planning.
+3. Use `--operator-dispatch` before sending implementation agents to a bead graph.
+4. Prefer `--id` or `--label` to narrow repair loops.
+"""
+
+
+class AgentArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        suggestion = suggest_flag(message)
+        if suggestion:
+            unknown, replacement = suggestion
+            message = f"{message}\nDid you mean: `{replacement}`?\nCorrected command: `{corrected_command(unknown, replacement)}`"
+        super().error(message)
+
+
+def suggest_flag(message: str) -> tuple[str, str] | None:
+    unknowns = re.findall(r"--[A-Za-z0-9][A-Za-z0-9_-]*", message)
+    for unknown in unknowns:
+        match = difflib.get_close_matches(unknown, KNOWN_FLAGS, n=1, cutoff=0.72)
+        if match:
+            return unknown, match[0]
+    return None
+
+
+def corrected_command(unknown: str, replacement: str) -> str:
+    parts = [Path(sys.argv[0]).name]
+    replaced = False
+    for arg in sys.argv[1:]:
+        if arg == unknown and not replaced:
+            parts.append(replacement)
+            replaced = True
+        else:
+            parts.append(arg)
+    if not replaced:
+        parts.append(replacement)
+    return " ".join(parts)
+
+
+def handle_robot_surface(argv: list[str]) -> int | None:
+    if argv == ["--version"]:
+        print(VERSION)
+        return 0
+    if argv == ["--robot-help"] or argv == ["robot-docs", "guide"]:
+        print(robot_docs())
+        return 0
+    if argv == ["capabilities", "--json"] or argv == ["--capabilities-json"]:
+        print(json.dumps(build_capabilities(), indent=2, sort_keys=True))
+        return 0
+    if argv[:1] in (["capabilities"], ["robot-docs"]):
+        wanted = "capabilities --json" if argv[:1] == ["capabilities"] else "robot-docs guide"
+        print(f"Unknown robot-docs/capabilities invocation: {' '.join(argv)}", file=sys.stderr)
+        print(f"Use: {Path(sys.argv[0]).name} {wanted}", file=sys.stderr)
+        return 2
+    return None
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    robot_rc = handle_robot_surface(argv)
+    if robot_rc is not None:
+        return robot_rc
+
+    parser = AgentArgumentParser(
+        description="Lint Beads for execution-contract quality",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""
+        Examples:
+          python3 scripts/bead_quality_gate.py --repo . --json
+          python3 scripts/bead_quality_gate.py --repo . --report markdown --fail-on never
+          python3 scripts/bead_quality_gate.py --repo . --operator-dispatch --json
+          python3 scripts/bead_quality_gate.py capabilities --json
+          python3 scripts/bead_quality_gate.py robot-docs guide
+
+        Exit codes:
+          0  gate passed for the selected fail-on mode
+          1  quality findings failed the selected fail-on mode
+          2  usage error, missing repo data, or upstream inspection failure
+        """).strip(),
+    )
     parser.add_argument("--repo", default=os.getcwd(), help="repo root containing .beads")
     parser.add_argument("--json", action="store_true", help="emit JSON")
     parser.add_argument("--report", choices=["markdown"], help="emit human-readable audit report")
@@ -597,7 +753,16 @@ def main() -> int:
         action="store_true",
         help="pre-implementation dispatch mode: elevate structural child warnings into split-review blockers",
     )
-    args = parser.parse_args()
+    parser.add_argument("--version", action="store_true", help="print version and exit")
+    parser.add_argument("--robot-help", action="store_true", help="print agent-oriented guide and exit")
+    args = parser.parse_args(argv)
+
+    if args.version:
+        print(VERSION)
+        return 0
+    if args.robot_help:
+        print(robot_docs())
+        return 0
 
     if args.strict:
         args.fail_on = "warning"

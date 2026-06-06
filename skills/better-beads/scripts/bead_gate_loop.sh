@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+VERSION="1.0.0"
+CONTRACT_VERSION="2026-06-05"
+KNOWN_FLAGS=(--repo --all --changed-staged --changed-since --operator-dispatch --strict --version --robot-help -h --help)
+
 usage() {
   cat >&2 <<'EOF'
 Usage: bead_gate_loop.sh [--repo PATH] [--all | --changed-staged | --changed-since REF | --operator-dispatch] [--strict]
+       bead_gate_loop.sh capabilities --json
+       bead_gate_loop.sh robot-docs guide
 
 Runs deterministic Beads quality gates and writes repair artifacts. Designed for
 agent loops, pre-commit-style orchestration, and pre-implementation dispatch.
@@ -16,8 +22,143 @@ Modes:
                         structural child size/section warnings into split-review
                         blockers and writes a dispatch verdict artifact
   --strict              fail on warnings as well as errors
+  --version             print version and exit
+  --robot-help          print an agent-oriented guide and exit
+
+Examples:
+  bead_gate_loop.sh --repo . --changed-staged
+  bead_gate_loop.sh --repo . --operator-dispatch --strict
+  bead_gate_loop.sh capabilities --json
+  bead_gate_loop.sh robot-docs guide
+
+Exit codes:
+  0  gates passed for selected mode
+  2  usage error, missing tooling, inspection failure, or gate blockage
 EOF
 }
+
+capabilities_json() {
+  cat <<EOF
+{
+  "tool": "bead_gate_loop.sh",
+  "version": "$VERSION",
+  "contract_version": "$CONTRACT_VERSION",
+  "summary": "Run Beads quality, cycle, plan, and insight gates as one operator command.",
+  "stdout": "Human-readable status plus artifact paths, or requested capabilities JSON.",
+  "stderr": "Usage errors and lower-level diagnostics only.",
+  "exit_codes": {
+    "0": "all selected gates passed",
+    "2": "usage error, missing br/bv/tooling, inspection failure, or blocked dispatch"
+  },
+  "robot_surfaces": [
+    {"argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
+    {"argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"},
+    {"argv": ["--robot-help"], "stdout_schema": "markdown-guide-v1"}
+  ],
+  "examples": [
+    "bead_gate_loop.sh --repo . --operator-dispatch",
+    "bead_gate_loop.sh --repo . --changed-since HEAD --strict",
+    "bead_gate_loop.sh capabilities --json"
+  ]
+}
+EOF
+}
+
+robot_docs() {
+  cat <<'EOF'
+# Better Beads gate loop robot guide
+
+Use `bead_gate_loop.sh` when an agent needs one pre-dispatch command that runs
+Beads quality checks, dependency-cycle inspection, BV robot plan, and BV robot insights.
+
+## First commands to try
+
+```bash
+scripts/bead_gate_loop.sh capabilities --json
+scripts/bead_gate_loop.sh --repo . --operator-dispatch
+scripts/bead_gate_loop.sh --repo . --changed-staged --strict
+```
+
+## Output contract
+
+- Human stdout names artifact paths, including the dispatch verdict JSON.
+- Diagnostics and usage errors go to stderr.
+- Exit `0` means dispatch/gate criteria passed.
+- Exit `2` means usage, tooling, parse/schema, cycle, or deterministic gate failure.
+
+## Agent workflow
+
+1. Prefer `--operator-dispatch` before assigning implementation agents.
+2. Read the printed dispatch verdict JSON for machine-readable blocked reasons.
+3. Repair the generated markdown artifact, then rerun the same command.
+EOF
+}
+
+suggest_option() {
+  local bad="$1"
+  python3 - "$bad" "${KNOWN_FLAGS[@]}" <<'PY'
+import difflib, sys
+bad = sys.argv[1]
+flags = sys.argv[2:]
+match = difflib.get_close_matches(bad, flags, n=1, cutoff=0.72)
+if match:
+    print(match[0])
+PY
+}
+
+unknown_option() {
+  local bad="$1"
+  shift || true
+  echo "Unknown option: $bad" >&2
+  local suggestion
+  suggestion="$(suggest_option "$bad")"
+  if [[ -n "$suggestion" ]]; then
+    local corrected=()
+    local replaced=0
+    local arg
+    for arg in "$@"; do
+      if [[ "$arg" == "$bad" && "$replaced" -eq 0 ]]; then
+        corrected+=("$suggestion")
+        replaced=1
+      else
+        corrected+=("$arg")
+      fi
+    done
+    echo "Did you mean: $suggestion" >&2
+    echo "Corrected command: $(basename "$0") ${corrected[*]}" >&2
+  fi
+  usage
+  exit 2
+}
+
+case "${1:-}" in
+  capabilities)
+    if [[ "${2:-}" == "--json" && "$#" -eq 2 ]]; then
+      capabilities_json
+      exit 0
+    fi
+    echo "Unknown capabilities invocation: $*" >&2
+    echo "Use: $(basename "$0") capabilities --json" >&2
+    exit 2
+    ;;
+  robot-docs)
+    if [[ "${2:-}" == "guide" && "$#" -eq 2 ]]; then
+      robot_docs
+      exit 0
+    fi
+    echo "Unknown robot-docs invocation: $*" >&2
+    echo "Use: $(basename "$0") robot-docs guide" >&2
+    exit 2
+    ;;
+  --robot-help)
+    robot_docs
+    exit 0
+    ;;
+  --version)
+    echo "$VERSION"
+    exit 0
+    ;;
+esac
 
 REPO="$(pwd)"
 MODE="changed-staged"
@@ -63,9 +204,7 @@ while (($#)); do
       exit 0
       ;;
     *)
-      echo "Unknown option: $1" >&2
-      usage
-      exit 2
+      unknown_option "$1" "$@"
       ;;
   esac
 done

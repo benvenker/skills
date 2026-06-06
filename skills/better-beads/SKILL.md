@@ -74,6 +74,7 @@ Before creating or polishing beads, read:
 Use `references/AUTHORING-PROMPTS.md` for the operator-router prompt and mode procedures.
 Use `references/PLAN-REVIEW-EXAMPLE.md` when reviewing a plausible but underpowered plan.
 Use `references/POLISHING-CASE-STUDIES.md` when repeated polish or quality-gate warnings might require graph changes instead of wording changes.
+Use `scripts/better-beads capabilities --json` or `scripts/better-beads triage --json` as the first agent-readable CLI entrypoint for local command discovery.
 Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, operator dispatch, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
 Use `scripts/bead_closeout_guard.sh` at the end of implementation swarms,
 operator ticks, or hooks so completed work cannot silently remain

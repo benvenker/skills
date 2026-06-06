@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="1.0.0"
+CONTRACT_VERSION="2026-06-05"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard triage capabilities robot-docs help)
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: better-beads <command> [args]
+
+Agent-oriented dispatcher for Better Beads CLI helpers.
+
+Commands:
+  quality-gate [args]       Run bead_quality_gate.py with args
+  gate-loop [args]          Run bead_gate_loop.sh with args
+  closeout-guard [args]     Run bead_closeout_guard.sh with args
+  triage --json             Print quick command recommendations as JSON
+  capabilities --json       Print machine-readable CLI contract
+  robot-docs guide          Print an agent-oriented guide
+  help                      Show this help
+
+Examples:
+  better-beads capabilities --json
+  better-beads triage --json
+  better-beads quality-gate --repo . --json
+  better-beads gate-loop --repo . --operator-dispatch
+  better-beads closeout-guard --repo . --json
+
+Exit codes:
+  0  command succeeded
+  2  usage error or unknown command
+  *  delegated command exit code otherwise
+EOF
+}
+
+capabilities_json() {
+  cat <<EOF
+{
+  "tool": "better-beads",
+  "version": "$VERSION",
+  "contract_version": "$CONTRACT_VERSION",
+  "summary": "Unified dispatcher for Better Beads quality, dispatch, and closeout commands.",
+  "stdout": "Delegated command output or requested machine-readable JSON only.",
+  "stderr": "Usage errors and delegated diagnostics only.",
+  "exit_codes": {
+    "0": "success",
+    "2": "usage error or unknown command",
+    "delegated": "quality-gate, gate-loop, and closeout-guard preserve delegated exit codes"
+  },
+  "robot_surfaces": [
+    {"argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
+    {"argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"},
+    {"argv": ["triage", "--json"], "stdout_schema": "better-beads-triage-v1"}
+  ],
+  "commands": [
+    {"name": "quality-gate", "delegates_to": "bead_quality_gate.py"},
+    {"name": "gate-loop", "delegates_to": "bead_gate_loop.sh"},
+    {"name": "closeout-guard", "delegates_to": "bead_closeout_guard.sh"},
+    {"name": "triage", "argv": ["triage", "--json"], "stdout_schema": "better-beads-triage-v1"},
+    {"name": "capabilities", "argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
+    {"name": "robot-docs", "argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"}
+  ],
+  "examples": [
+    "bash $SCRIPT_DIR/better-beads triage --json",
+    "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
+    "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
+    "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json"
+  ]
+}
+EOF
+}
+
+triage_json() {
+  cat <<EOF
+{
+  "tool": "better-beads",
+  "schema": "better-beads-triage-v1",
+  "quick_ref": [
+    "Use quality-gate for deterministic bead description checks.",
+    "Use gate-loop before dispatching implementation agents.",
+    "Use closeout-guard before ending implementation/operator swarms."
+  ],
+  "recommended_commands": [
+    "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
+    "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
+    "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json"
+  ],
+  "delegates": {
+    "quality-gate": "scripts/bead_quality_gate.py",
+    "gate-loop": "scripts/bead_gate_loop.sh",
+    "closeout-guard": "scripts/bead_closeout_guard.sh"
+  }
+}
+EOF
+}
+
+robot_docs() {
+  cat <<'EOF'
+# Better Beads CLI robot guide
+
+`better-beads` is the first command an agent should try when operating the
+Better Beads skill's local CLI helpers.
+
+## First commands to try
+
+```bash
+scripts/better-beads capabilities --json
+scripts/better-beads triage --json
+scripts/better-beads quality-gate --repo . --report markdown --fail-on never
+scripts/better-beads gate-loop --repo . --operator-dispatch
+scripts/better-beads closeout-guard --repo . --json
+```
+
+## Command map
+
+- `quality-gate` delegates to `bead_quality_gate.py`.
+- `gate-loop` delegates to `bead_gate_loop.sh`.
+- `closeout-guard` delegates to `bead_closeout_guard.sh`.
+- `triage --json` returns quick reference plus recommended next commands.
+
+## Output contract
+
+- `capabilities --json` and `triage --json` emit JSON on stdout only.
+- Usage errors go to stderr and exit `2`.
+- Delegated commands preserve the underlying command's exit code.
+EOF
+}
+
+suggest_command() {
+  local bad="$1"
+  python3 - "$bad" "${KNOWN_COMMANDS[@]}" <<'PY'
+import difflib, sys
+bad = sys.argv[1]
+commands = sys.argv[2:]
+match = difflib.get_close_matches(bad, commands, n=1, cutoff=0.65)
+if match:
+    print(match[0])
+PY
+}
+
+unknown_command() {
+  local bad="$1"
+  shift || true
+  echo "Unknown command: $bad" >&2
+  local suggestion
+  suggestion="$(suggest_command "$bad")"
+  if [[ -n "$suggestion" ]]; then
+    echo "Did you mean: $suggestion" >&2
+    echo "Corrected command: $(basename "$0") $suggestion $*" >&2
+  fi
+  usage
+  exit 2
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  help|-h|--help)
+    usage
+    ;;
+  --version)
+    echo "$VERSION"
+    ;;
+  capabilities)
+    if [[ "${2:-}" == "--json" && "$#" -eq 2 ]]; then
+      capabilities_json
+    else
+      echo "Use: $(basename "$0") capabilities --json" >&2
+      exit 2
+    fi
+    ;;
+  robot-docs)
+    if [[ "${2:-}" == "guide" && "$#" -eq 2 ]]; then
+      robot_docs
+    else
+      echo "Use: $(basename "$0") robot-docs guide" >&2
+      exit 2
+    fi
+    ;;
+  --robot-help)
+    robot_docs
+    ;;
+  triage)
+    if [[ "${2:-}" == "--json" && "$#" -eq 2 ]]; then
+      triage_json
+    else
+      echo "Use: $(basename "$0") triage --json" >&2
+      exit 2
+    fi
+    ;;
+  quality-gate)
+    shift
+    exec python3 "$SCRIPT_DIR/bead_quality_gate.py" "$@"
+    ;;
+  gate-loop)
+    shift
+    exec bash "$SCRIPT_DIR/bead_gate_loop.sh" "$@"
+    ;;
+  closeout-guard)
+    shift
+    exec bash "$SCRIPT_DIR/bead_closeout_guard.sh" "$@"
+    ;;
+  *)
+    shift || true
+    unknown_command "$cmd" "$@"
+    ;;
+esac
