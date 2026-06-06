@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "list" && "${2:-}" == "--json" ]]; then
+  if [[ -f ".beads/list.exit" ]]; then
+    rc="$(cat ".beads/list.exit")"
+    if [[ -f ".beads/list.stderr" ]]; then
+      cat ".beads/list.stderr" >&2
+    fi
+    if [[ -f ".beads/list.json" ]]; then
+      cat ".beads/list.json"
+    fi
+    exit "$rc"
+  fi
+  cat ".beads/list.json"
+  exit 0
+fi
+
+if [[ "${1:-}" == "dep" && "${2:-}" == "cycles" && "${3:-}" == "--json" ]]; then
+  if [[ -f ".beads/cycles.exit" ]]; then
+    rc="$(cat ".beads/cycles.exit")"
+    if [[ -f ".beads/cycles.stderr" ]]; then
+      cat ".beads/cycles.stderr" >&2
+    fi
+    if [[ -f ".beads/cycles.json" ]]; then
+      cat ".beads/cycles.json"
+    fi
+    exit "$rc"
+  fi
+  if [[ -f ".beads/cycles.json" ]]; then
+    cat ".beads/cycles.json"
+  else
+    printf '{"count":0,"cycles":[]}\n'
+  fi
+  exit 0
+fi
+
+echo "unexpected br invocation: $*" >&2
+exit 99

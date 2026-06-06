@@ -215,9 +215,17 @@ modes = [
 
 if emit_json:
     print(json.dumps({
-        "tool": "better-beads",
+        "tool": "bead_route.sh",
         "schema": "better-beads-route-v1",
-        "graph_state": {"has_beads_dir": False, "total_beads": 0, "by_status": {}, "has_cycles": False, "cycle_count": 0},
+        "graph_state": {
+            "has_beads_dir": False,
+            "total_beads": 0,
+            "by_status": {},
+            "has_cycles": False,
+            "cycle_count": 0,
+            "cycle_inspection": "ok",
+            "inspection_warnings": [],
+        },
         "recommended_mode": "create-from-raw-plan",
         "reasoning": "No .beads directory found. Use create-from-raw-plan if you have a ready plan, or improve-plan-first if the plan needs strengthening.",
         "modes": modes,
@@ -249,40 +257,88 @@ if ! command -v br >/dev/null 2>&1; then
 fi
 
 BEADS_JSON="$(mktemp "${TMPDIR:-/tmp}/bead-route-list.XXXXXX.json")"
+BEADS_ERR="$(mktemp "${TMPDIR:-/tmp}/bead-route-list.XXXXXX.err")"
 CYCLES_JSON="$(mktemp "${TMPDIR:-/tmp}/bead-route-cycles.XXXXXX.json")"
-trap 'rm -f "$BEADS_JSON" "$CYCLES_JSON"' EXIT
+CYCLES_ERR="$(mktemp "${TMPDIR:-/tmp}/bead-route-cycles.XXXXXX.err")"
+trap 'rm -f "$BEADS_JSON" "$BEADS_ERR" "$CYCLES_JSON" "$CYCLES_ERR"' EXIT
 
 cd "$REPO"
-br list --json >"$BEADS_JSON" 2>/dev/null || true
-br dep cycles --json >"$CYCLES_JSON" 2>/dev/null || true
+if ! br list --json >"$BEADS_JSON" 2>"$BEADS_ERR"; then
+  echo "br list --json failed; cannot safely inspect .beads state" >&2
+  if [[ -s "$BEADS_ERR" ]]; then
+    sed 's/^/  /' "$BEADS_ERR" >&2
+  fi
+  exit 2
+fi
 
-python3 - "$BEADS_JSON" "$CYCLES_JSON" "$JSON" <<'PY'
+CYCLE_INSPECTION="ok"
+if ! br dep cycles --json >"$CYCLES_JSON" 2>"$CYCLES_ERR"; then
+  CYCLE_INSPECTION="failed"
+fi
+
+python3 - "$BEADS_JSON" "$CYCLES_JSON" "$JSON" "$CYCLE_INSPECTION" "$CYCLES_ERR" <<'PY'
 import json
 import sys
 
 beads_path = sys.argv[1]
 cycles_path = sys.argv[2]
 emit_json = sys.argv[3] == "1"
+cycle_inspection = sys.argv[4]
+cycles_err_path = sys.argv[5]
 
 # Parse beads
 try:
     with open(beads_path) as f:
         beads_data = json.load(f)
-    issues = beads_data.get("issues", beads_data if isinstance(beads_data, list) else [])
-except Exception:
-    issues = []
+except Exception as exc:
+    print(f"br list --json returned malformed JSON; cannot safely inspect .beads state: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+if isinstance(beads_data, dict) and any(key in beads_data for key in ("error", "errors")):
+    print("br list --json returned an error envelope; cannot safely inspect .beads state", file=sys.stderr)
+    sys.exit(2)
+
+if isinstance(beads_data, dict):
+    issues = beads_data.get("issues", [])
+elif isinstance(beads_data, list):
+    issues = beads_data
+else:
+    print("br list --json returned unsupported JSON; cannot safely inspect .beads state", file=sys.stderr)
+    sys.exit(2)
+
+if not isinstance(issues, list):
+    print("br list --json returned a non-list issues payload; cannot safely inspect .beads state", file=sys.stderr)
+    sys.exit(2)
 
 # Parse cycles
-try:
-    with open(cycles_path) as f:
-        cycles_data = json.load(f)
-    cycle_count = cycles_data.get("count")
-    if cycle_count is None and isinstance(cycles_data.get("cycles"), list):
-        cycle_count = len(cycles_data["cycles"])
-    if cycle_count is None:
-        cycle_count = 0
-except Exception:
-    cycle_count = 0
+inspection_warnings = []
+if cycle_inspection == "failed":
+    cycle_count = None
+    cycle_stderr = ""
+    try:
+        with open(cycles_err_path) as f:
+            cycle_stderr = f.read().strip()
+    except Exception:
+        cycle_stderr = ""
+    warning = "br dep cycles --json failed; cycle safety is unknown"
+    if cycle_stderr:
+        warning += f": {cycle_stderr}"
+    inspection_warnings.append(warning)
+else:
+    try:
+        with open(cycles_path) as f:
+            cycles_data = json.load(f)
+        if not isinstance(cycles_data, dict):
+            raise ValueError("expected object")
+        cycle_count = cycles_data.get("count")
+        if cycle_count is None and isinstance(cycles_data.get("cycles"), list):
+            cycle_count = len(cycles_data["cycles"])
+        if cycle_count is None:
+            cycle_count = 0
+    except Exception as exc:
+        cycle_count = None
+        cycle_inspection = "failed"
+        inspection_warnings.append(f"Could not parse br dep cycles --json output; cycle safety is unknown: {exc}")
 
 # Count by status
 by_status = {}
@@ -294,6 +350,7 @@ total = len(issues)
 in_progress = by_status.get("in_progress", 0)
 open_count = by_status.get("open", 0)
 closed_count = by_status.get("closed", 0)
+active_count = total - closed_count
 
 # Decision tree
 if total == 0:
@@ -321,17 +378,25 @@ elif open_count > 0:
         f"{total} beads ({open_count} open, {closed_count} closed). "
         "Open beads need inspection for split/merge/dependency/label repair before dispatch."
     )
-else:
+elif active_count == 0:
     mode = "create-from-raw-plan"
     reasoning = (
         f"{total} beads, all closed. Use create-from-raw-plan for new work, "
         "or improve-plan-first if the plan needs strengthening."
     )
+else:
+    mode = "polish-existing-graph"
+    reasoning = (
+        f"{total} beads with non-terminal active status values ({active_count} not closed). "
+        "Existing graph state needs inspection before creating new work."
+    )
 
-if cycle_count > 0:
+if cycle_count is not None and cycle_count > 0:
     reasoning += f" WARNING: {cycle_count} dependency cycle(s) detected; resolve before dispatch."
+elif cycle_inspection == "failed":
+    reasoning += " WARNING: dependency cycle inspection failed; cycle safety is unknown."
 
-has_cycles = cycle_count > 0
+has_cycles = cycle_count is not None and cycle_count > 0
 
 graph_state = {
     "has_beads_dir": True,
@@ -339,6 +404,8 @@ graph_state = {
     "by_status": by_status,
     "has_cycles": has_cycles,
     "cycle_count": cycle_count,
+    "cycle_inspection": cycle_inspection,
+    "inspection_warnings": inspection_warnings,
 }
 
 modes = [
@@ -362,10 +429,12 @@ elif mode == "closeout":
 
 if has_cycles:
     next_steps.append("Resolve dependency cycles: br dep cycles --json")
+elif cycle_inspection == "failed":
+    next_steps.append("Resolve cycle inspection failure before implementation dispatch")
 
 if emit_json:
     print(json.dumps({
-        "tool": "better-beads",
+        "tool": "bead_route.sh",
         "schema": "better-beads-route-v1",
         "graph_state": graph_state,
         "recommended_mode": mode,
