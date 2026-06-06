@@ -9,9 +9,14 @@ Use these files before creating or polishing Beads. The top-level `SKILL.md` is 
 3. `QUALITY-RUBRIC.md` — scoring rubric and hard caps.
 4. `BEAD-FORMATTING.md` — BV/terminal-friendly formatting rules.
 5. `QUALITY-GATES.md` — deterministic lint gate and hook/CI guidance.
-6. `AUTHORING-PROMPTS.md` — prompts for creating, reviewing, and polishing Beads.
-7. `PLAN-REVIEW-EXAMPLE.md` — example critique of a plausible but underpowered plan.
-8. `POLISHING-CASE-STUDIES.md` — field examples of when polish should change the graph instead of only the prose.
+6. `AUTHORING-PROMPTS.md` — operator-router prompt and shared inspection commands.
+7. Mode procedures (read the one matching your routed mode):
+   - `MODE-CREATE-FROM-RAW-PLAN.md` — convert a raw plan into a bead graph.
+   - `MODE-IMPROVE-PLAN-FIRST.md` — strengthen a plan before creating beads.
+   - `MODE-POLISH-EXISTING-GRAPH.md` — repair an existing graph before dispatch.
+   - `MODE-CLOSEOUT.md` — make bead state truthful at implementation end.
+8. `PLAN-REVIEW-EXAMPLE.md` — example critique of a plausible but underpowered plan.
+9. `POLISHING-CASE-STUDIES.md` — field examples of when polish should change the graph instead of only the prose.
 
 ## Minimum context rule
 

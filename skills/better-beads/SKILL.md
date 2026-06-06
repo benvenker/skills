@@ -15,24 +15,25 @@ Before writing, polishing, dispatching, or closing Beads, operate the workflow. 
 
 ### Inspection-first router
 
-1. Inspect before mutation:
-   - Use `br --json` commands for Beads state, details, dependencies, labels, and status.
-   - Use `bv --robot-*` commands for graph plans, insights, and machine-readable inspection.
-   - Never run bare `bv`.
-   - Use `br` only for mutations after the selected mode permits mutation.
-2. Determine graph relevance:
-   - If the user provides explicit bead IDs or labels, treat those as the primary scope and inspect them directly.
-   - Otherwise inspect the active graph by title, labels, parents, dependencies, and the plan/request subject to decide whether relevant beads already exist.
-3. Route to one mode:
+1. **Route first.** Run the route command to inspect bead state and get a mode recommendation:
+   ```bash
+   scripts/better-beads route --json
+   ```
+2. **Read the mode procedure.** Each mode has a dedicated reference with Actions, Gates, and Outputs:
+   - `create-from-raw-plan` → `references/MODE-CREATE-FROM-RAW-PLAN.md`
+   - `improve-plan-first` → `references/MODE-IMPROVE-PLAN-FIRST.md`
+   - `polish-existing-graph` → `references/MODE-POLISH-EXISTING-GRAPH.md`
+   - `closeout` → `references/MODE-CLOSEOUT.md`
+3. **Override if needed.** The route command recommends based on graph state. Override if the user's intent calls for a different mode:
    - `create-from-raw-plan`: no relevant beads exist, and the raw plan already passes pre-mutation readiness.
    - `improve-plan-first`: the plan is raw, weak, under-grounded, or would make implementation agents invent behavior, data contracts, failure handling, or verification.
    - `polish-existing-graph`: relevant beads exist and need split/merge/deepen/delete/defer, dependency, label, or closure-contract repair before implementation.
    - `closeout`: implementation/operator work is ending, or `in_progress` beads need truth repair.
-4. Gate dispatch:
+4. **Gate dispatch:**
    - Implementation agents must not use a graph until operator gates pass: graph relevance inspected, dependency cycles checked, ready labels verified, parent/child closure shape reviewed, semantic readiness accepted, and closeout state clean.
    - Raw-plan mode may auto-create beads after readiness and gates pass; do not add a default human approval pause unless the user or repo policy asks for one.
 
-Use `references/AUTHORING-PROMPTS.md` for the executable mode procedure.
+Use `references/AUTHORING-PROMPTS.md` for the operator-router prompt and shared inspection commands.
 
 ## Strong Agent Question Test
 
@@ -71,9 +72,16 @@ Before creating or polishing beads, read:
 4. `references/QUALITY-RUBRIC.md`
 5. `references/BEAD-FORMATTING.md`
 
-Use `references/AUTHORING-PROMPTS.md` for the operator-router prompt and mode procedures.
+Use `scripts/better-beads route --json` to determine the correct mode, then read the matching mode procedure:
+- `references/MODE-CREATE-FROM-RAW-PLAN.md`
+- `references/MODE-IMPROVE-PLAN-FIRST.md`
+- `references/MODE-POLISH-EXISTING-GRAPH.md`
+- `references/MODE-CLOSEOUT.md`
+
+Use `references/AUTHORING-PROMPTS.md` for the operator-router prompt and shared inspection commands.
 Use `references/PLAN-REVIEW-EXAMPLE.md` when reviewing a plausible but underpowered plan.
 Use `references/POLISHING-CASE-STUDIES.md` when repeated polish or quality-gate warnings might require graph changes instead of wording changes.
+Use `scripts/better-beads route --json` to determine the operator mode before mutation.
 Use `scripts/better-beads capabilities --json` or `scripts/better-beads triage --json` as the first agent-readable CLI entrypoint for local command discovery.
 Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, operator dispatch, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
 Use `scripts/bead_closeout_guard.sh` at the end of implementation swarms,
@@ -221,6 +229,7 @@ should still verify current owners before editing.
 Format bead descriptions for BV readability: short sections, bullets instead of
 long paragraphs, fenced commands where helpful, grouped anchors/surfaces, and compact contracts.
 
+Use scripts/better-beads route --json to determine the correct operator mode.
 Use br for mutations and br --json / bv --robot-* for inspection. Validate with
 br dep cycles --json, bv --robot-insights, bv --robot-plan, and
 bead_gate_loop.sh --operator-dispatch before implementation dispatch.
