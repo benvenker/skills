@@ -4,3 +4,6 @@ node_modules/
 __pycache__/
 *.pyc
 prompt-exports/
+
+# bv (beads viewer) local config and caches
+.bv/
