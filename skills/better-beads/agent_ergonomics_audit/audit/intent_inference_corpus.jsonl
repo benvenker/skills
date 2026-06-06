@@ -1,0 +1,4 @@
+{"argv": ["python3", "scripts/bead_quality_gate.py", "--jsno"], "corpus_id": "I-001", "evidence": "Did you mean: `--json`; Corrected command shown", "outcome": "useful-hint", "surface_id": "bb-quality-gate"}
+{"argv": ["scripts/bead_gate_loop.sh", "--operator-dispatc"], "corpus_id": "I-002", "evidence": "Did you mean: --operator-dispatch", "outcome": "useful-hint", "surface_id": "bb-gate-loop"}
+{"argv": ["scripts/bead_closeout_guard.sh", "--jsno"], "corpus_id": "I-003", "evidence": "Did you mean: --json", "outcome": "useful-hint", "surface_id": "bb-closeout-guard"}
+{"argv": ["scripts/better-beads", "quality-gat"], "corpus_id": "I-004", "evidence": "Did you mean: quality-gate", "outcome": "useful-hint", "surface_id": "bb-cli-dispatcher"}
