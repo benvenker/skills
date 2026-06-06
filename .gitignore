@@ -7,3 +7,6 @@ prompt-exports/
 
 # bv (beads viewer) local config and caches
 .bv/
+
+# ntm local run logs and session state
+.ntm/
