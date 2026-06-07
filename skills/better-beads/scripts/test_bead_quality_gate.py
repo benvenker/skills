@@ -227,6 +227,69 @@ class BeadQualityGateTests(unittest.TestCase):
             self.assertEqual(payload["issue_count"], 1)
             self.assertEqual(payload["findings"], [])
 
+    def test_json_telemetry_preserves_stdout_and_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            write_issues(repo, [issue("bd-telemetry")])
+            telemetry = Path(tmp) / "telemetry.jsonl"
+
+            without = run_gate(repo, "--json")
+            with_telemetry = run_gate(repo, "--json", "--telemetry", str(telemetry))
+
+            self.assertEqual(with_telemetry.returncode, without.returncode)
+            self.assertEqual(with_telemetry.stdout, without.stdout)
+            self.assertEqual(with_telemetry.stderr, "")
+            events = telemetry.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(events), 1)
+            event = json.loads(events[0])
+            self.assertEqual(event["tool"], "bead_quality_gate.py")
+            self.assertEqual(event["schema_version"], "better-beads-telemetry-v1")
+            self.assertEqual(event["exit_code"], without.returncode)
+            self.assertEqual(event["verdict"], "pass")
+            self.assertEqual(event["mode"], "quality-gate")
+            self.assertEqual(event["finding_counts"]["issues"], 1)
+            self.assertEqual(event["finding_counts"]["errors"], 0)
+            self.assertNotIn(str(repo.resolve()), json.dumps(event, sort_keys=True))
+
+    def test_json_telemetry_warning_stays_on_stderr(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            write_issues(repo, [issue("bd-telemetry-warning")])
+
+            without = run_gate(repo, "--json")
+            with_warning = run_gate(repo, "--json", "--telemetry", str(repo))
+
+            self.assertEqual(with_warning.returncode, without.returncode)
+            self.assertEqual(with_warning.stdout, without.stdout)
+            stderr_lines = [line for line in with_warning.stderr.splitlines() if line]
+            self.assertEqual(len(stderr_lines), 1, with_warning.stderr)
+            self.assertIn("better-beads telemetry warning:", stderr_lines[0])
+
+    def test_markdown_telemetry_preserves_stdout_and_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            write_issues(repo, [issue("bd-markdown-telemetry")])
+            telemetry = Path(tmp) / "telemetry.jsonl"
+
+            without = run_gate(repo, "--report", "markdown", "--fail-on", "never")
+            with_telemetry = run_gate(
+                repo,
+                "--report",
+                "markdown",
+                "--fail-on",
+                "never",
+                "--telemetry",
+                str(telemetry),
+            )
+
+            self.assertEqual(with_telemetry.returncode, without.returncode)
+            self.assertEqual(with_telemetry.stdout, without.stdout)
+            self.assertEqual(with_telemetry.stderr, "")
+            self.assertEqual(len(telemetry.read_text(encoding="utf-8").splitlines()), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

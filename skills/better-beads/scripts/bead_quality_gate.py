@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 import textwrap
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -258,13 +259,11 @@ def referenced_scripts(desc: str) -> list[str]:
 
 
 def section_body(desc: str, heading_needles: list[str]) -> str:
-    current: str | None = None
     chunks: list[str] = []
     capture = False
     for line in desc.splitlines():
         h = norm_heading(line)
         if h is not None:
-            current = h
             capture = any(needle in h for needle in heading_needles)
             continue
         if capture:
@@ -715,6 +714,7 @@ def handle_robot_surface(argv: list[str]) -> int | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    started = time.monotonic()
     argv = list(sys.argv[1:] if argv is None else argv)
     robot_rc = handle_robot_surface(argv)
     if robot_rc is not None:
@@ -753,6 +753,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="pre-implementation dispatch mode: elevate structural child warnings into split-review blockers",
     )
+    parser.add_argument("--telemetry", help="append one Better Beads telemetry JSONL event to this path")
     parser.add_argument("--version", action="store_true", help="print version and exit")
     parser.add_argument("--robot-help", action="store_true", help="print agent-oriented guide and exit")
     args = parser.parse_args(argv)
@@ -820,13 +821,45 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{f.severity.upper()}] {f.issue_id} {f.code}: {f.message}")
             print(f"        {f.title}")
 
+    exit_code = 0
     if args.fail_on == "never":
-        return 0
-    if args.fail_on == "warning" and findings:
-        return 1
-    if args.fail_on == "error" and errors:
-        return 1
-    return 0
+        exit_code = 0
+    elif args.fail_on == "warning" and findings:
+        exit_code = 1
+    elif args.fail_on == "error" and errors:
+        exit_code = 1
+
+    if args.telemetry:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        finding_counts = {
+            "issues": len(issues),
+            "errors": len(errors),
+            "warnings": len(warnings),
+            "operator_blocking": len(operator_blocking),
+            "split_review_required": len(split_review_required),
+        }
+        verdict = "pass" if exit_code == 0 else "fail"
+        try:
+            from better_beads_telemetry import emit_event
+
+            result = emit_event(
+                args.telemetry,
+                tool="bead_quality_gate.py",
+                tool_version=VERSION,
+                contract_version=CONTRACT_VERSION,
+                mode="operator-dispatch" if args.operator_dispatch else "quality-gate",
+                repo=repo,
+                duration_ms=duration_ms,
+                exit_code=exit_code,
+                verdict=verdict,
+                finding_counts=finding_counts,
+            )
+            if not result.ok and result.warning:
+                print(result.warning, file=sys.stderr)
+        except Exception as exc:
+            print(f"better-beads telemetry warning: {exc}", file=sys.stderr)
+
+    return exit_code
 
 
 if __name__ == "__main__":
