@@ -1,0 +1,443 @@
+[
+  {
+    "case_id": "A1",
+    "name": "no_beads_no_plan",
+    "repo_state": "no_beads",
+    "plan": null,
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "create-from-raw-plan",
+      "graph_state": {
+        "has_beads_dir": false,
+        "total_beads": 0,
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "not_checked"
+      },
+      "next_steps_substrings": [
+        "MODE-CREATE-FROM-RAW-PLAN.md",
+        "br init"
+      ]
+    }
+  },
+  {
+    "case_id": "A2",
+    "name": "no_beads_weak_plan",
+    "repo_state": "no_beads",
+    "plan": "weak",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "improve-plan-first",
+      "graph_state": {
+        "has_beads_dir": false,
+        "total_beads": 0,
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "weak"
+      },
+      "next_steps_substrings": [
+        "MODE-IMPROVE-PLAN-FIRST.md",
+        "missing readiness gates"
+      ]
+    }
+  },
+  {
+    "case_id": "A3",
+    "name": "no_beads_ready_plan",
+    "repo_state": "no_beads",
+    "plan": "ready",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "create-from-raw-plan",
+      "graph_state": {
+        "has_beads_dir": false,
+        "total_beads": 0,
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "structurally_ready"
+      },
+      "next_steps_substrings": [
+        "MODE-CREATE-FROM-RAW-PLAN.md"
+      ]
+    }
+  },
+  {
+    "case_id": "A4",
+    "name": "empty_graph_no_plan",
+    "repo_state": "beads",
+    "issues": [],
+    "plan": null,
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "create-from-raw-plan",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 0,
+        "by_status": {},
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "not_checked"
+      },
+      "next_steps_substrings": [
+        "MODE-CREATE-FROM-RAW-PLAN.md"
+      ]
+    }
+  },
+  {
+    "case_id": "A5",
+    "name": "empty_graph_weak_plan",
+    "repo_state": "beads",
+    "issues": [],
+    "plan": "weak",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "improve-plan-first",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 0,
+        "by_status": {},
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "weak"
+      },
+      "next_steps_substrings": [
+        "missing readiness gates",
+        "Re-run bead_route.sh --plan PATH --json"
+      ]
+    }
+  },
+  {
+    "case_id": "A6",
+    "name": "all_closed_ready_plan",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "closed"
+      },
+      {
+        "id": "bb-b",
+        "status": "closed"
+      }
+    ],
+    "plan": "ready",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "create-from-raw-plan",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 2,
+        "by_status": {
+          "closed": 2
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "structurally_ready"
+      },
+      "next_steps_substrings": [
+        "MODE-CREATE-FROM-RAW-PLAN.md"
+      ]
+    }
+  },
+  {
+    "case_id": "A7",
+    "name": "open_no_in_progress",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "open"
+      },
+      {
+        "id": "bb-b",
+        "status": "closed"
+      }
+    ],
+    "plan": null,
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "polish-existing-graph",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 2,
+        "by_status": {
+          "open": 1,
+          "closed": 1
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "not_checked"
+      },
+      "next_steps_substrings": [
+        "MODE-POLISH-EXISTING-GRAPH.md",
+        "br list --json",
+        "bv --robot-insights"
+      ]
+    }
+  },
+  {
+    "case_id": "A8",
+    "name": "in_progress_no_open",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "in_progress"
+      },
+      {
+        "id": "bb-b",
+        "status": "closed"
+      }
+    ],
+    "plan": "ready",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "closeout",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 2,
+        "by_status": {
+          "in_progress": 1,
+          "closed": 1
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "structurally_ready"
+      },
+      "next_steps_substrings": [
+        "MODE-CLOSEOUT.md",
+        "bead_closeout_guard.sh"
+      ]
+    }
+  },
+  {
+    "case_id": "A9",
+    "name": "open_and_in_progress",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "open"
+      },
+      {
+        "id": "bb-b",
+        "status": "in_progress"
+      }
+    ],
+    "plan": null,
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "polish-existing-graph",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 2,
+        "by_status": {
+          "open": 1,
+          "in_progress": 1
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "not_checked"
+      },
+      "next_steps_substrings": [
+        "MODE-POLISH-EXISTING-GRAPH.md",
+        "br list --json"
+      ]
+    }
+  },
+  {
+    "case_id": "A10",
+    "name": "non_terminal_unknown_status",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "blocked"
+      }
+    ],
+    "plan": "ready",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "polish-existing-graph",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 1,
+        "by_status": {
+          "blocked": 1
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "structurally_ready"
+      },
+      "next_steps_substrings": [
+        "MODE-POLISH-EXISTING-GRAPH.md"
+      ]
+    }
+  },
+  {
+    "case_id": "A11",
+    "name": "weak_plan_overrides_existing_graph",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "open"
+      }
+    ],
+    "plan": "weak",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "improve-plan-first",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 1,
+        "by_status": {
+          "open": 1
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 0,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "weak"
+      },
+      "next_steps_substrings": [
+        "MODE-IMPROVE-PLAN-FIRST.md",
+        "missing readiness gates"
+      ]
+    }
+  },
+  {
+    "case_id": "A12",
+    "name": "cycles_warn_with_graph_mode",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "open"
+      }
+    ],
+    "cycles": {
+      "count": 1,
+      "cycles": [
+        [
+          "bb-a",
+          "bb-b",
+          "bb-a"
+        ]
+      ]
+    },
+    "plan": null,
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "polish-existing-graph",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 1,
+        "by_status": {
+          "open": 1
+        },
+        "cycle_inspection": "ok",
+        "cycle_count": 1,
+        "has_cycles": true
+      },
+      "plan_readiness": {
+        "status": "not_checked"
+      },
+      "reasoning_substrings": [
+        "WARNING: 1 dependency cycle"
+      ],
+      "next_steps_substrings": [
+        "Resolve dependency cycles"
+      ]
+    }
+  },
+  {
+    "case_id": "A13",
+    "name": "cycle_inspection_failure_warns",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "open"
+      }
+    ],
+    "cycles_exit": 5,
+    "cycles_stderr": "cycles command unavailable",
+    "plan": "ready",
+    "expected": {
+      "exit_code": 0,
+      "recommended_mode": "polish-existing-graph",
+      "graph_state": {
+        "has_beads_dir": true,
+        "total_beads": 1,
+        "by_status": {
+          "open": 1
+        },
+        "cycle_inspection": "failed",
+        "cycle_count": null,
+        "has_cycles": false
+      },
+      "plan_readiness": {
+        "status": "structurally_ready"
+      },
+      "reasoning_substrings": [
+        "cycle inspection failed"
+      ],
+      "next_steps_substrings": [
+        "Resolve cycle inspection failure"
+      ]
+    }
+  },
+  {
+    "case_id": "A14",
+    "name": "br_list_failure_fails_closed",
+    "repo_state": "beads",
+    "issues": [
+      {
+        "id": "bb-a",
+        "status": "open"
+      }
+    ],
+    "list_exit": 7,
+    "list_stderr": "database unavailable",
+    "plan": null,
+    "expected": {
+      "exit_code": 2,
+      "stderr_substrings": [
+        "br list --json failed"
+      ],
+      "stdout": ""
+    }
+  }
+]
