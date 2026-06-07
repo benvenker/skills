@@ -13,6 +13,7 @@ they do not already emit.
 | `better-beads-dispatch-verdict-v1` | `better-beads-dispatch-verdict-v1.schema.json` | `skills/better-beads/scripts/bead_gate_loop.sh --operator-dispatch --json` | Implemented |
 | `bead-quality-gate-v1` | `better-beads-quality-gate-v1.schema.json` | `python3 skills/better-beads/scripts/bead_quality_gate.py --json` | Implemented |
 | `better-beads-authoring-triage-v1` | `better-beads-authoring-triage-v1.schema.json` | `skills/better-beads/scripts/better-beads authoring-triage --json` | Implemented |
+| `better-beads-telemetry-v1` | `better-beads-telemetry-v1.schema.json` | `python3 skills/better-beads/scripts/better_beads_telemetry.py --emit PATH ...` | Implemented |
 
 ## Deferred Contracts
 

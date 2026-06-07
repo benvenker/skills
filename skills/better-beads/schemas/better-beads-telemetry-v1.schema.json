@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-telemetry-v1.schema.json",
+  "title": "Better Beads telemetry event v1",
+  "description": "JSONL event contract produced by scripts/better_beads_telemetry.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "timestamp",
+    "tool",
+    "tool_version",
+    "contract_version",
+    "mode",
+    "repo_id",
+    "repo_basename",
+    "duration_ms",
+    "exit_code",
+    "verdict",
+    "finding_counts",
+    "schema_version"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "tool_version": {
+      "type": "string"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "repo_basename": {
+      "type": "string"
+    },
+    "duration_ms": {
+      "type": "integer"
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "verdict": {
+      "type": "string"
+    },
+    "finding_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "schema_version": {
+      "const": "better-beads-telemetry-v1"
+    }
+  }
+}

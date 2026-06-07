@@ -11,14 +11,14 @@ printf 'Leaving Better Beads schema test temp root at %s\n' "$TMP_ROOT" >&2
 
 usage() {
   cat >&2 <<'EOF'
-Usage: test_schemas.sh [route|dispatch|quality|authoring-triage]
+Usage: test_schemas.sh [route|dispatch|quality|authoring-triage|telemetry]
 
 Validates Better Beads JSON schemas using only bash and python3 stdlib.
 EOF
 }
 
 case "${1:-all}" in
-  all|route|dispatch|quality|authoring-triage)
+  all|route|dispatch|quality|authoring-triage|telemetry)
     TARGET="${1:-all}"
     ;;
   -h|--help)
@@ -35,6 +35,7 @@ SCHEMA_ROUTE="$SCHEMA_DIR/better-beads-route-v1.schema.json"
 SCHEMA_DISPATCH="$SCHEMA_DIR/better-beads-dispatch-verdict-v1.schema.json"
 SCHEMA_QUALITY="$SCHEMA_DIR/better-beads-quality-gate-v1.schema.json"
 SCHEMA_AUTHORING="$SCHEMA_DIR/better-beads-authoring-triage-v1.schema.json"
+SCHEMA_TELEMETRY="$SCHEMA_DIR/better-beads-telemetry-v1.schema.json"
 FAKE_BIN="$TMP_ROOT/bin"
 mkdir -p "$FAKE_BIN"
 
@@ -459,6 +460,46 @@ run_authoring_tests() {
     env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/better-beads" authoring-triage --repo "$repo" --json
 }
 
+run_telemetry_tests() {
+  local repo event_log payload
+
+  repo="$TMP_ROOT/telemetry-repo"
+  mkdir -p "$repo"
+  event_log="$TMP_ROOT/telemetry-events.jsonl"
+  payload="$TMP_ROOT/telemetry-event.json"
+  python3 "$SCRIPT_DIR/better_beads_telemetry.py" \
+    --emit "$event_log" \
+    --tool test-tool \
+    --tool-version 1.0.0 \
+    --contract-version 2026-06-07 \
+    --mode schema-test \
+    --repo "$repo" \
+    --duration-ms 12 \
+    --exit-code 0 \
+    --verdict pass \
+    --finding-counts '{"errors":0,"warnings":0}' \
+    --run-id schema-test-run
+  python3 - "$event_log" "$payload" "$repo" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+event_path = Path(sys.argv[1])
+payload_path = Path(sys.argv[2])
+repo = Path(sys.argv[3]).resolve()
+lines = event_path.read_text(encoding="utf-8").splitlines()
+if len(lines) != 1:
+    raise SystemExit(f"expected one telemetry event, got {len(lines)}")
+event = json.loads(lines[0])
+text = json.dumps(event, sort_keys=True)
+for forbidden in (str(repo), "description", "stdout", "prompt"):
+    if forbidden in text:
+        raise SystemExit(f"telemetry event leaked forbidden content: {forbidden}")
+payload_path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+PY
+  validate_schema_and_payload "$SCHEMA_TELEMETRY" "$payload" "telemetry-helper-event" "better_beads_telemetry.py --emit"
+}
+
 if [[ "$TARGET" == "route" || "$TARGET" == "all" ]]; then
   run_route_tests
 fi
@@ -473,4 +514,8 @@ fi
 
 if [[ "$TARGET" == "authoring-triage" || "$TARGET" == "all" ]]; then
   run_authoring_tests
+fi
+
+if [[ "$TARGET" == "telemetry" || "$TARGET" == "all" ]]; then
+  run_telemetry_tests
 fi
