@@ -1,0 +1,124 @@
+{
+  "error_count": 12,
+  "exit_code": 1,
+  "finding_code_multiset": {
+    "missing-closure": 3,
+    "missing-impl-failure_behavior": 2,
+    "missing-impl-grounding": 2,
+    "missing-parent-children": 1,
+    "missing-scope_boundary": 3,
+    "missing-success": 1,
+    "too-few-sections": 3
+  },
+  "findings": [
+    {
+      "code": "missing-parent-children",
+      "issue_id": "authoring-ergonomics",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-scope_boundary",
+      "issue_id": "authoring-ergonomics",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-success",
+      "issue_id": "authoring-ergonomics",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "too-few-sections",
+      "issue_id": "authoring-ergonomics",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-impl-failure_behavior",
+      "issue_id": "publish-graph-cookbook",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-impl-grounding",
+      "issue_id": "publish-graph-cookbook",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-scope_boundary",
+      "issue_id": "publish-graph-cookbook",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "too-few-sections",
+      "issue_id": "publish-graph-cookbook",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-impl-failure_behavior",
+      "issue_id": "safe-graph-helper",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-impl-grounding",
+      "issue_id": "safe-graph-helper",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-scope_boundary",
+      "issue_id": "safe-graph-helper",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "too-few-sections",
+      "issue_id": "safe-graph-helper",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "error"
+    },
+    {
+      "code": "missing-closure",
+      "issue_id": "authoring-ergonomics",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "warning"
+    },
+    {
+      "code": "missing-closure",
+      "issue_id": "publish-graph-cookbook",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "warning"
+    },
+    {
+      "code": "missing-closure",
+      "issue_id": "safe-graph-helper",
+      "operator_blocking": false,
+      "requires_split_review": false,
+      "severity": "warning"
+    }
+  ],
+  "issue_count": 3,
+  "operator_blocking_count": 0,
+  "split_review_required_count": 0,
+  "warning_count": 3
+}
