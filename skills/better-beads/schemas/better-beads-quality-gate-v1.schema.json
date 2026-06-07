@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-quality-gate-v1.schema.json",
+  "title": "Better Beads quality gate v1",
+  "description": "Current JSON output contract for bead_quality_gate.py --json. This producer does not emit top-level schema/tool/version fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "repo",
+    "issue_count",
+    "error_count",
+    "warning_count",
+    "fail_on",
+    "operator_dispatch",
+    "operator_blocking_count",
+    "split_review_required_count",
+    "findings"
+  ],
+  "properties": {
+    "repo": {
+      "type": "string"
+    },
+    "issue_count": {
+      "type": "integer"
+    },
+    "error_count": {
+      "type": "integer"
+    },
+    "warning_count": {
+      "type": "integer"
+    },
+    "fail_on": {
+      "enum": [
+        "error",
+        "warning",
+        "never"
+      ]
+    },
+    "operator_dispatch": {
+      "type": "boolean"
+    },
+    "operator_blocking_count": {
+      "type": "integer"
+    },
+    "split_review_required_count": {
+      "type": "integer"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "severity",
+          "issue_id",
+          "title",
+          "code",
+          "message",
+          "operator_blocking",
+          "requires_split_review"
+        ],
+        "properties": {
+          "severity": {
+            "enum": [
+              "error",
+              "warning"
+            ]
+          },
+          "issue_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "operator_blocking": {
+            "type": "boolean"
+          },
+          "requires_split_review": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
+

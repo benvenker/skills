@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-dispatch-verdict-v1.schema.json",
+  "title": "Better Beads dispatch verdict v1",
+  "description": "Current JSON output contract for bead_gate_loop.sh --operator-dispatch --json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "tool",
+    "version",
+    "contract_version",
+    "mode",
+    "operator_dispatch",
+    "fail_on",
+    "changed_since",
+    "dispatch_allowed",
+    "blocked_reasons",
+    "command_statuses",
+    "tool_failures",
+    "parse_failures",
+    "schema_failures",
+    "inspection_error_envelopes",
+    "finding_counts",
+    "deterministic_error_count",
+    "warning_count",
+    "operator_blocking_count",
+    "split_review_required_count",
+    "dependency_cycle_count",
+    "quality_gate_exit_code",
+    "artifacts",
+    "insights_error"
+  ],
+  "properties": {
+    "schema": {
+      "const": "better-beads-dispatch-verdict-v1"
+    },
+    "tool": {
+      "const": "bead_gate_loop.sh"
+    },
+    "version": {
+      "type": "string"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "mode": {
+      "const": "operator-dispatch"
+    },
+    "operator_dispatch": {
+      "type": "boolean"
+    },
+    "fail_on": {
+      "type": "string"
+    },
+    "changed_since": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "dispatch_allowed": {
+      "type": "boolean"
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "command_statuses": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "tool_failures": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "parse_failures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "schema_failures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inspection_error_envelopes": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "finding_counts": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "deterministic_errors",
+        "warnings",
+        "operator_blocking",
+        "split_review_required"
+      ],
+      "properties": {
+        "deterministic_errors": {
+          "type": "integer"
+        },
+        "warnings": {
+          "type": "integer"
+        },
+        "operator_blocking": {
+          "type": "integer"
+        },
+        "split_review_required": {
+          "type": "integer"
+        }
+      }
+    },
+    "deterministic_error_count": {
+      "type": "integer"
+    },
+    "warning_count": {
+      "type": "integer"
+    },
+    "operator_blocking_count": {
+      "type": "integer"
+    },
+    "split_review_required_count": {
+      "type": "integer"
+    },
+    "dependency_cycle_count": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quality_gate_exit_code": {
+      "type": "integer"
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "insights_error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}
+

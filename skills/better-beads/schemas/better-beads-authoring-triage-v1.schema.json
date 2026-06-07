@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-authoring-triage-v1.schema.json",
+  "title": "Better Beads authoring triage v1",
+  "description": "Current JSON output contract for better-beads authoring-triage --json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "schema",
+    "contract_version",
+    "repo",
+    "inputs",
+    "route",
+    "selected_mode",
+    "graph_inspection",
+    "plan_readiness",
+    "mutation_eligibility",
+    "required_gates",
+    "next_commands",
+    "command_statuses"
+  ],
+  "properties": {
+    "tool": {
+      "const": "better-beads"
+    },
+    "schema": {
+      "const": "better-beads-authoring-triage-v1"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "repo": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "plan_path"
+      ],
+      "properties": {
+        "plan_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "selected_mode": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "reference",
+        "quickpack_path",
+        "reasoning"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "create-from-raw-plan",
+            "improve-plan-first",
+            "polish-existing-graph",
+            "closeout"
+          ]
+        },
+        "reference": {
+          "type": "string"
+        },
+        "quickpack_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning": {
+          "type": "string"
+        }
+      }
+    },
+    "graph_inspection": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "graph_state",
+        "issue_count",
+        "active_count",
+        "ready_count",
+        "blocked_count",
+        "in_progress_ids",
+        "bv_plan_summary"
+      ],
+      "properties": {
+        "graph_state": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "issue_count": {
+          "type": "integer"
+        },
+        "active_count": {
+          "type": "integer"
+        },
+        "ready_count": {
+          "type": "integer"
+        },
+        "blocked_count": {
+          "type": "integer"
+        },
+        "in_progress_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bv_plan_summary": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "plan_readiness": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "mutation_eligibility": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "authoring_triage_is_read_only",
+        "may_mutate_after_mode_review_and_gates",
+        "blockers",
+        "note"
+      ],
+      "properties": {
+        "authoring_triage_is_read_only": {
+          "type": "boolean"
+        },
+        "may_mutate_after_mode_review_and_gates": {
+          "type": "boolean"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "required_gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "name",
+          "command"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "next_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "command_statuses": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

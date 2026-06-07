@@ -11,14 +11,14 @@ printf 'Leaving Better Beads schema test temp root at %s\n' "$TMP_ROOT" >&2
 
 usage() {
   cat >&2 <<'EOF'
-Usage: test_schemas.sh [route]
+Usage: test_schemas.sh [route|dispatch|quality|authoring-triage]
 
 Validates Better Beads JSON schemas using only bash and python3 stdlib.
 EOF
 }
 
 case "${1:-all}" in
-  all|route)
+  all|route|dispatch|quality|authoring-triage)
     TARGET="${1:-all}"
     ;;
   -h|--help)
@@ -32,6 +32,9 @@ case "${1:-all}" in
 esac
 
 SCHEMA_ROUTE="$SCHEMA_DIR/better-beads-route-v1.schema.json"
+SCHEMA_DISPATCH="$SCHEMA_DIR/better-beads-dispatch-verdict-v1.schema.json"
+SCHEMA_QUALITY="$SCHEMA_DIR/better-beads-quality-gate-v1.schema.json"
+SCHEMA_AUTHORING="$SCHEMA_DIR/better-beads-authoring-triage-v1.schema.json"
 FAKE_BIN="$TMP_ROOT/bin"
 mkdir -p "$FAKE_BIN"
 
@@ -42,6 +45,20 @@ set -euo pipefail
 case "${1:-} ${2:-} ${3:-}" in
   "list --json ")
     cat .beads/list.json
+    ;;
+  "ready --json ")
+    if [[ -f .beads/ready.json ]]; then
+      cat .beads/ready.json
+    else
+      cat .beads/list.json
+    fi
+    ;;
+  "blocked --json ")
+    if [[ -f .beads/blocked.json ]]; then
+      cat .beads/blocked.json
+    else
+      printf '[]\n'
+    fi
     ;;
   "dep cycles --json")
     if [[ -f .beads/cycles.exit ]]; then
@@ -83,6 +100,83 @@ make_repo() {
   printf '[]\n' >"$repo/.beads/list.json"
   printf '{"count":0,"cycles":[]}\n' >"$repo/.beads/cycles.json"
   printf '%s\n' "$repo"
+}
+
+write_valid_issue_repo() {
+  local repo="$1"
+  local oversized="${2:-0}"
+  mkdir -p "$repo/.beads"
+  python3 - "$repo/.beads/issues.jsonl" "$repo/.beads/list.json" "$repo/.beads/ready.json" "$repo/.beads/blocked.json" "$oversized" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+issues_path = Path(sys.argv[1])
+list_path = Path(sys.argv[2])
+ready_path = Path(sys.argv[3])
+blocked_path = Path(sys.argv[4])
+oversized = sys.argv[5] == "1"
+
+extra = ""
+if oversized:
+    extra = "\n".join(f"- Extra same-behavior detail {i}: keep filtered graph behavior explicit." for i in range(90))
+
+description = f"""## Outcome
+Filtered library load graphs render the correct series for the selected scope.
+
+## Success criteria
+- Selected filters change the rendered series.
+- Empty result sets show the documented empty state.
+
+## Scope / non-goals
+- Do: update the graph behavior for filtered library loads.
+- Do not: redesign the dashboard or add unrelated chart types.
+
+## Failure behavior
+- Missing data renders the empty state without throwing.
+- Invalid filters fail closed to no series.
+
+## Known anchors / surfaces
+- User-visible surface: library load graph.
+- Data contract: filtered series rows with label, timestamp, and value.
+- Current likely files/patterns: search for existing graph rendering tests.
+
+## Validation
+```bash
+python3 -m pytest tests/test_library_load_graphs.py
+```
+Expected: targeted graph behavior tests pass.
+
+## Closure evidence
+Close with commands run, result summary, and any follow-up bead IDs.
+{extra}
+"""
+
+issue = {
+    "id": "bd-schema-smoke",
+    "title": "schema smoke bead",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "created_at": "2026-06-07T00:00:00Z",
+    "created_by": "test",
+    "updated_at": "2026-06-07T00:00:00Z",
+    "source_repo": "schema-test",
+    "source_repo_path": str(issues_path.parent.parent),
+    "compaction_level": 0,
+    "original_size": 0,
+    "labels": [],
+    "dependencies": [],
+    "dependency_count": 0,
+    "description": description,
+}
+
+issues_path.write_text(json.dumps(issue) + "\n", encoding="utf-8")
+list_path.write_text(json.dumps([issue]) + "\n", encoding="utf-8")
+ready_path.write_text(json.dumps([issue]) + "\n", encoding="utf-8")
+blocked_path.write_text("[]\n", encoding="utf-8")
+PY
+  printf '{"count":0,"cycles":[]}\n' >"$repo/.beads/cycles.json"
 }
 
 write_ready_plan() {
@@ -310,7 +404,73 @@ EOF
   run_route_case "graph-present-cycle-inspection-failed" "$repo" "bead_route.sh --repo REPO --json"
 }
 
+run_json_producer_case() {
+  local schema="$1"
+  local case_name="$2"
+  local producer="$3"
+  shift 3
+  local payload="$TMP_ROOT/${case_name}.json"
+  if ! "$@" >"$payload" 2>"$TMP_ROOT/${case_name}.stderr"; then
+    echo "producer failed for case=$case_name producer=$producer" >&2
+    cat "$TMP_ROOT/${case_name}.stderr" >&2
+    exit 1
+  fi
+  validate_schema_and_payload "$schema" "$payload" "$case_name" "$producer"
+}
+
+run_dispatch_tests() {
+  local repo
+
+  repo="$TMP_ROOT/dispatch-pass"
+  write_valid_issue_repo "$repo" 0
+  run_json_producer_case "$SCHEMA_DISPATCH" "dispatch-operator-pass" "bead_gate_loop.sh --operator-dispatch --json" \
+    env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/bead_gate_loop.sh" --repo "$repo" --operator-dispatch --json
+
+  repo="$TMP_ROOT/dispatch-block"
+  write_valid_issue_repo "$repo" 1
+  local payload="$TMP_ROOT/dispatch-operator-block.json"
+  set +e
+  PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/bead_gate_loop.sh" --repo "$repo" --operator-dispatch --json >"$payload" 2>"$TMP_ROOT/dispatch-operator-block.stderr"
+  local rc=$?
+  set -e
+  [[ "$rc" -eq 2 ]]
+  validate_schema_and_payload "$SCHEMA_DISPATCH" "$payload" "dispatch-operator-block" "bead_gate_loop.sh --operator-dispatch --json"
+}
+
+run_quality_tests() {
+  local repo
+  repo="$TMP_ROOT/quality-json"
+  write_valid_issue_repo "$repo" 0
+  run_json_producer_case "$SCHEMA_QUALITY" "quality-gate-json" "bead_quality_gate.py --json" \
+    python3 "$SCRIPT_DIR/bead_quality_gate.py" --repo "$repo" --json
+}
+
+run_authoring_tests() {
+  local repo
+
+  repo="$TMP_ROOT/authoring-no-graph"
+  mkdir -p "$repo"
+  run_json_producer_case "$SCHEMA_AUTHORING" "authoring-triage-no-graph" "better-beads authoring-triage --json" \
+    env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/better-beads" authoring-triage --repo "$repo" --json
+
+  repo="$TMP_ROOT/authoring-graph-present"
+  write_valid_issue_repo "$repo" 0
+  run_json_producer_case "$SCHEMA_AUTHORING" "authoring-triage-graph-present" "better-beads authoring-triage --json" \
+    env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/better-beads" authoring-triage --repo "$repo" --json
+}
+
 if [[ "$TARGET" == "route" || "$TARGET" == "all" ]]; then
   run_route_tests
 fi
 
+if [[ "$TARGET" == "dispatch" || "$TARGET" == "all" ]]; then
+  run_dispatch_tests
+fi
+
+if [[ "$TARGET" == "quality" || "$TARGET" == "all" ]]; then
+  run_quality_tests
+fi
+
+if [[ "$TARGET" == "authoring-triage" || "$TARGET" == "all" ]]; then
+  run_authoring_tests
+fi
