@@ -2,6 +2,9 @@
 These examples are copied from a high-quality Poolside Studio Beads graph so this skill is portable. Use them as taste references, not as domain templates.
 Read at least one parent example and one child example before creating or polishing beads.
 
+For copy-paste `br` commands that create this parent/child shape, see
+`GRAPH-CONSTRUCTION-COOKBOOK.md`.
+
 ---
 
 ## bd-1mu: PR 4A: Extract reusable file-size policy helpers

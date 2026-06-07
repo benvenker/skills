@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT="$ROOT/skills/better-beads/scripts/bead_route.sh"
 TEST_BIN="$ROOT/skills/better-beads/test/bin"
+FIXTURES="$ROOT/skills/better-beads/test/fixtures"
 WORK_ROOT="${TMPDIR:-/tmp}/better-beads-route-test.$$"
 
 mkdir -p "$WORK_ROOT"
@@ -27,6 +28,10 @@ route_json() {
   PATH="$TEST_BIN:$PATH" bash "$SCRIPT" --repo "$1" --json
 }
 
+route_json_plan() {
+  PATH="$TEST_BIN:$PATH" bash "$SCRIPT" --repo "$1" --plan "$2" --json
+}
+
 assert_route() {
   local repo="$1"
   local expected_mode="$2"
@@ -47,6 +52,45 @@ assert payload["recommended_mode"] == expected_mode, payload
 assert payload["graph_state"]["total_beads"] == expected_total, payload
 assert payload["graph_state"]["cycle_inspection"] == "ok", payload
 assert payload["graph_state"]["cycle_count"] == 0, payload
+PY
+}
+
+assert_plan_route() {
+  local repo="$1"
+  local plan="$2"
+  local expected_mode="$3"
+  local expected_status="$4"
+  local payload="$WORK_ROOT/plan-${expected_mode}-${expected_status}.json"
+  route_json_plan "$repo" "$plan" > "$payload"
+  python3 - "$expected_mode" "$expected_status" "$payload" <<'PY'
+import json
+import sys
+
+expected_mode = sys.argv[1]
+expected_status = sys.argv[2]
+with open(sys.argv[3]) as f:
+    payload = json.load(f)
+readiness = payload["plan_readiness"]
+assert payload["tool"] == "bead_route.sh", payload
+assert payload["schema"] == "better-beads-route-v1", payload
+assert payload["recommended_mode"] == expected_mode, payload
+assert readiness["check_required"] is True, payload
+assert readiness["gate_reference"].endswith("#pre-mutation-readiness-gates"), payload
+assert readiness["required_gates"] == [
+    "outcome",
+    "anchors",
+    "validation",
+    "failure_behavior",
+    "non_goals",
+    "parent_child_shape",
+    "dependency_order",
+], payload
+assert readiness["alternate_mode_if_weak"] == "improve-plan-first", payload
+assert readiness["status"] == expected_status, payload
+if expected_status == "weak":
+    assert readiness["missing_gates"], payload
+else:
+    assert readiness["missing_gates"] == [], payload
 PY
 }
 
@@ -97,10 +141,26 @@ assert payload["tool"] == "bead_route.sh", payload
 assert payload["recommended_mode"] == "create-from-raw-plan", payload
 assert payload["graph_state"]["has_beads_dir"] is False, payload
 PY
+assert_plan_route "$repo" "$FIXTURES/weak-plan.md" improve-plan-first weak
+assert_plan_route "$repo" "$FIXTURES/ready-plan.md" create-from-raw-plan structurally_ready
+
+stdout="$WORK_ROOT/missing-plan-stdout.txt"
+stderr="$WORK_ROOT/missing-plan-stderr.txt"
+set +e
+PATH="$TEST_BIN:$PATH" bash "$SCRIPT" --repo "$repo" --plan "$WORK_ROOT/missing-plan.md" --json >"$stdout" 2>"$stderr"
+rc=$?
+set -e
+[[ "$rc" -eq 2 ]]
+[[ ! -s "$stdout" ]]
+grep -q -- "--plan path is missing or unreadable" "$stderr"
 
 repo="$(make_repo blocked-only)"
 write_list "$repo" '[{"id":"a","status":"blocked"},{"id":"b","status":"blocked"}]'
 assert_route "$repo" polish-existing-graph 2
+
+repo="$(make_repo ready-plan-preserves-graph-state)"
+write_list "$repo" '[{"id":"a","status":"open"}]'
+assert_plan_route "$repo" "$FIXTURES/ready-plan.md" polish-existing-graph structurally_ready
 
 repo="$(make_repo pending-only)"
 write_list "$repo" '[{"id":"a","status":"pending"}]'

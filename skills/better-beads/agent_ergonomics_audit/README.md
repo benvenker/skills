@@ -1,7 +1,7 @@
 # Agent Ergonomics Audit Workspace
 
 For tool: `better-beads`
-Target: `/Users/ben/code/skills/skills/better-beads`
+Target: `skills/better-beads`
 
 This is a measurement workspace produced by the
 `agent-ergonomics-and-intuitiveness-maximization-for-cli-tools` skill.
@@ -25,9 +25,9 @@ This is a measurement workspace produced by the
 
 ## How to resume
 
-This workspace lives **inside the target repo** at `/Users/ben/code/skills/skills/better-beads/agent_ergonomics_audit/` and is committed alongside the code on the target's current branch (typically `main`). The phase-loop scripts live in the **skill repo**, not in this workspace. From the skill repo's root (or with absolute paths), run:
+This workspace lives **inside the target repo** at `skills/better-beads/agent_ergonomics_audit/` and is committed alongside the code on the target's current branch (typically `main`). The phase-loop scripts live in the **skill repo**, not in this workspace. From the skill repo's root (or with portable repo-relative paths), run:
 
-1. `<SKILL>/scripts/discover-cli.sh /Users/ben/code/skills/skills/better-beads` to confirm the binary still exists.
-2. `<SKILL>/scripts/validate_pass.sh /Users/ben/code/skills/skills/better-beads/agent_ergonomics_audit` to check artifact integrity.
+1. `<SKILL>/scripts/discover-cli.sh skills/better-beads` to confirm the binary still exists.
+2. `<SKILL>/scripts/validate_pass.sh skills/better-beads/agent_ergonomics_audit` to check artifact integrity.
 3. Read `audit/HANDOFF.md` here in the workspace.
 4. Pick a mode and send the resumed-pass kickoff prompt.

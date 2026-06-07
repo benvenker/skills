@@ -19,6 +19,10 @@ Before writing, polishing, dispatching, or closing Beads, operate the workflow. 
    ```bash
    scripts/better-beads route --json
    ```
+   Use `scripts/better-beads route --plan PATH --json` when a raw plan or PRD
+   is available; failed plan-readiness gates route to `improve-plan-first`.
+   The dispatcher delegates route output to `bead_route.sh`, so delegated JSON
+   keeps `tool: "bead_route.sh"` and schema `better-beads-route-v1`.
 2. **Read the mode procedure.** Each mode has a dedicated reference with Actions, Gates, and Outputs:
    - `create-from-raw-plan` → `references/MODE-CREATE-FROM-RAW-PLAN.md`
    - `improve-plan-first` → `references/MODE-IMPROVE-PLAN-FIRST.md`
@@ -26,7 +30,7 @@ Before writing, polishing, dispatching, or closing Beads, operate the workflow. 
    - `closeout` → `references/MODE-CLOSEOUT.md`
 3. **Override if needed.** The route command recommends based on graph state. Override if the user's intent calls for a different mode:
    - `create-from-raw-plan`: no relevant beads exist, and the raw plan already passes pre-mutation readiness.
-   - `improve-plan-first`: the plan is raw, weak, under-grounded, or would make implementation agents invent behavior, data contracts, failure handling, or verification.
+   - `improve-plan-first`: the user asks to strengthen a plan, the route command finds failed plan-readiness gates, or the plan is raw, weak, under-grounded, or would make implementation agents invent behavior, data contracts, failure handling, or verification.
    - `polish-existing-graph`: relevant beads exist and need split/merge/deepen/delete/defer, dependency, label, or closure-contract repair before implementation.
    - `closeout`: implementation/operator work is ending, or `in_progress` beads need truth repair.
 4. **Gate dispatch:**
@@ -78,11 +82,24 @@ Use `scripts/better-beads route --json` to determine the correct mode, then read
 - `references/MODE-POLISH-EXISTING-GRAPH.md`
 - `references/MODE-CLOSEOUT.md`
 
+For fresh create-from-raw-plan work, read
+`references/CREATE-FROM-RAW-PLAN-QUICKPACK.md` before deeper references. Fall
+back to the full references when the graph is large, ambiguous, or fails gates.
+
 Use `references/AUTHORING-PROMPTS.md` for the operator-router prompt and shared inspection commands.
 Use `references/PLAN-REVIEW-EXAMPLE.md` when reviewing a plausible but underpowered plan.
 Use `references/POLISHING-CASE-STUDIES.md` when repeated polish or quality-gate warnings might require graph changes instead of wording changes.
 Use `scripts/better-beads route --json` to determine the operator mode before mutation.
-Use `scripts/better-beads capabilities --json` or `scripts/better-beads triage --json` as the first agent-readable CLI entrypoint for local command discovery.
+Use `scripts/better-beads route --plan PATH --json` to inspect plan-readiness
+gates; `plan_readiness.status: "weak"` means strengthen the plan before bead
+creation or graph mutation.
+Use `scripts/better-beads authoring-triage --json` as the stable first
+agent-readable packet after loading the skill. It returns the route
+recommendation, graph inspection summary, selected mode reference, optional
+create-from-raw-plan quickpack path, mutation eligibility, required gates, and
+next commands without mutating Beads. Use `scripts/better-beads capabilities
+--json` or `scripts/better-beads triage --json` for broader local command
+discovery.
 Use `references/QUALITY-GATES.md`, `scripts/bead_gate_loop.sh`, and `scripts/bead_quality_gate.py` to gate bead quality in hooks, CI, audits, operator dispatch, or agent rerun loops. For lane rescue, generate a report with `bead_quality_gate.py --label <lane> --include-closed --report markdown --fail-on never`.
 Use `scripts/bead_closeout_guard.sh` at the end of implementation swarms,
 operator ticks, or hooks so completed work cannot silently remain
@@ -93,6 +110,11 @@ operator ticks, or hooks so completed work cannot silently remain
 - Use `br` for bead mutations.
 - Use `br --json` and `bv --robot-*` for inspection.
 - Never run bare `bv`.
+- Treat advertised robot/read inspection surfaces as read-only. They must not
+  dirty tracked files such as `.gitignore`, `.beads/issues.jsonl`, or skill
+  docs. If an external tool initializes local cache ignore rules, run it in an
+  isolated workspace or make that mutation an explicit reviewed change before
+  dispatch.
 - Do not create GitHub issues unless explicitly requested.
 - Parent beads are closure contracts; do not close a parent until children are closed or explicitly closed as unnecessary with evidence.
 - Do not create one bead per checklist bullet.
@@ -194,6 +216,11 @@ bv --robot-plan
 ```
 
 Use `--changed-staged` for normal hooks and `--strict` for dedicated bead-polish passes, new-graph review, or when a repo explicitly wants warnings to block. For full operator dispatch, use `--operator-dispatch` and also perform the semantic review in `references/SEMANTIC-GATE.md` over all relevant active beads; the current staged hook check alone is not dispatch authority.
+
+Read-side robot commands must also pass the no-mutation smoke in
+`scripts/test_cli_robot_surfaces.sh`. Add future read modes such as
+`authoring-triage`, `frontier`, or `semantic-pack` to that harness before
+advertising them as safe first commands.
 
 Check that:
 

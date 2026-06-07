@@ -10,6 +10,15 @@ Better Beads helps create and polish Beads task graphs as behavioral execution c
 
 Use it when converting plans or PRDs into Beads, reviewing an existing Beads graph, or tightening tasks before multi-agent implementation.
 
+The packaged skill includes an inspection-first routing workflow:
+
+- `scripts/better-beads route --json` delegates to `bead_route.sh` and emits
+  `better-beads-route-v1`.
+- `scripts/better-beads route --plan PATH --json` reports plan-readiness gates
+  and routes weak plans to `improve-plan-first`.
+- `scripts/better-beads capabilities --json` and the reference docs publish the
+  robot surfaces, schemas, and delegated helper identity expected by agents.
+
 It also includes closeout helpers so implementation swarms do not leave
 completed work stuck in `in_progress`. Use
 `skills/better-beads/scripts/bead_closeout_guard.sh` from swarm/operator

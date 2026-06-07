@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "organization": "Ben Venker",
-  "date": "May 2026",
-  "abstract": "Better Beads is a Beads authoring and review skill for turning plans into behavioral execution contracts for fungible coding agents. Covers parent closure contracts, dependency graph hygiene, failure behavior, validation paths, BV readability, and reviewable PR-sized atomic slices without reducing test coverage.",
+  "date": "June 2026",
+  "abstract": "Better Beads is a Beads authoring and review skill for turning plans into behavioral execution contracts for fungible coding agents. Covers inspection-first routing, plan-readiness gates, route schema discovery, delegated helper identity, parent closure contracts, dependency graph hygiene, failure behavior, validation paths, BV readability, and reviewable PR-sized atomic slices without reducing test coverage.",
   "references": [
     "https://github.com/benvenker/skills"
   ]

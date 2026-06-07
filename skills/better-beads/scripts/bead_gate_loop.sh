@@ -3,11 +3,11 @@ set -euo pipefail
 
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-05"
-KNOWN_FLAGS=(--repo --all --changed-staged --changed-since --operator-dispatch --strict --version --robot-help -h --help)
+KNOWN_FLAGS=(--repo --all --changed-staged --changed-since --operator-dispatch --strict --json --version --robot-help -h --help)
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bead_gate_loop.sh [--repo PATH] [--all | --changed-staged | --changed-since REF | --operator-dispatch] [--strict]
+Usage: bead_gate_loop.sh [--repo PATH] [--all | --changed-staged | --changed-since REF | --operator-dispatch] [--strict] [--json]
        bead_gate_loop.sh capabilities --json
        bead_gate_loop.sh robot-docs guide
 
@@ -22,6 +22,8 @@ Modes:
                         structural child size/section warnings into split-review
                         blockers and writes a dispatch verdict artifact
   --strict              fail on warnings as well as errors
+  --json                emit the dispatch verdict JSON on stdout; human status
+                        and repair prompts move to stderr
   --version             print version and exit
   --robot-help          print an agent-oriented guide and exit
 
@@ -44,8 +46,8 @@ capabilities_json() {
   "version": "$VERSION",
   "contract_version": "$CONTRACT_VERSION",
   "summary": "Run Beads quality, cycle, plan, and insight gates as one operator command.",
-  "stdout": "Human-readable status plus artifact paths, or requested capabilities JSON.",
-  "stderr": "Usage errors and lower-level diagnostics only.",
+  "stdout": "Human-readable status plus artifact paths, requested capabilities JSON, or requested dispatch verdict JSON.",
+  "stderr": "Usage errors, lower-level diagnostics, and human status when --json is requested.",
   "exit_codes": {
     "0": "all selected gates passed",
     "2": "usage error, missing br/bv/tooling, inspection failure, or blocked dispatch"
@@ -53,10 +55,34 @@ capabilities_json() {
   "robot_surfaces": [
     {"argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
     {"argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"},
-    {"argv": ["--robot-help"], "stdout_schema": "markdown-guide-v1"}
+    {"argv": ["--robot-help"], "stdout_schema": "markdown-guide-v1"},
+    {"argv": ["--operator-dispatch", "--json"], "stdout_schema": "better-beads-dispatch-verdict-v1"}
   ],
+  "schemas": {
+    "better-beads-dispatch-verdict-v1": {
+      "stability": "stable",
+      "description": "Machine-readable operator dispatch verdict emitted by --operator-dispatch --json.",
+      "required_fields": [
+        "schema",
+        "tool",
+        "version",
+        "contract_version",
+        "mode",
+        "operator_dispatch",
+        "dispatch_allowed",
+        "blocked_reasons",
+        "command_statuses",
+        "finding_counts",
+        "parse_failures",
+        "schema_failures",
+        "inspection_error_envelopes",
+        "artifacts"
+      ]
+    }
+  },
   "examples": [
     "bead_gate_loop.sh --repo . --operator-dispatch",
+    "bead_gate_loop.sh --repo . --operator-dispatch --json",
     "bead_gate_loop.sh --repo . --changed-since HEAD --strict",
     "bead_gate_loop.sh capabilities --json"
   ]
@@ -76,12 +102,15 @@ Beads quality checks, dependency-cycle inspection, BV robot plan, and BV robot i
 ```bash
 scripts/bead_gate_loop.sh capabilities --json
 scripts/bead_gate_loop.sh --repo . --operator-dispatch
+scripts/bead_gate_loop.sh --repo . --operator-dispatch --json
 scripts/bead_gate_loop.sh --repo . --changed-staged --strict
 ```
 
 ## Output contract
 
 - Human stdout names artifact paths, including the dispatch verdict JSON.
+- With `--json`, stdout is one `better-beads-dispatch-verdict-v1` JSON object.
+- With `--json`, human status and repair prompts move to stderr or artifacts.
 - Diagnostics and usage errors go to stderr.
 - Exit `0` means dispatch/gate criteria passed.
 - Exit `2` means usage, tooling, parse/schema, cycle, or deterministic gate failure.
@@ -165,6 +194,7 @@ MODE="changed-staged"
 CHANGED_SINCE=""
 STRICT=0
 OPERATOR_DISPATCH=0
+JSON_OUTPUT=0
 
 while (($#)); do
   case "$1" in
@@ -197,6 +227,10 @@ while (($#)); do
       ;;
     --strict)
       STRICT=1
+      shift
+      ;;
+    --json)
+      JSON_OUTPUT=1
       shift
       ;;
     -h|--help)
@@ -279,7 +313,7 @@ fi
 QUALITY_RC=0
 python3 "$QUALITY_GATE" "${QUALITY_ARGS[@]}" >"$GATE_JSON" || QUALITY_RC=$?
 
-python3 - "$GATE_JSON" "$CYCLES_JSON" "$PLAN_JSON" "$INSIGHTS_JSON" "$PROMPT_MD" "$SPLIT_REVIEW_MD" "$VERDICT_JSON" "$MODE" "$FAIL_ON" "$CHANGED_SINCE" "$OPERATOR_DISPATCH" "$BR_RC" "$BV_PLAN_RC" "$BV_INSIGHTS_RC" "$QUALITY_RC" "$ARTIFACT_DIR" <<'PY'
+python3 - "$GATE_JSON" "$CYCLES_JSON" "$PLAN_JSON" "$INSIGHTS_JSON" "$PROMPT_MD" "$SPLIT_REVIEW_MD" "$VERDICT_JSON" "$MODE" "$FAIL_ON" "$CHANGED_SINCE" "$OPERATOR_DISPATCH" "$BR_RC" "$BV_PLAN_RC" "$BV_INSIGHTS_RC" "$QUALITY_RC" "$ARTIFACT_DIR" "$VERSION" "$CONTRACT_VERSION" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -301,6 +335,8 @@ from pathlib import Path
     bv_insights_rc,
     quality_rc,
     artifact_dir,
+    version,
+    contract_version,
 ) = sys.argv[1:]
 
 gate_path = Path(gate_path)
@@ -513,14 +549,27 @@ else:
 split_path.write_text("\n".join(split_lines))
 
 verdict = {
+    "schema": "better-beads-dispatch-verdict-v1",
+    "tool": "bead_gate_loop.sh",
+    "version": version,
+    "contract_version": contract_version,
     "mode": mode,
     "operator_dispatch": operator_dispatch_bool,
+    "fail_on": fail_on,
+    "changed_since": changed_since or None,
     "dispatch_allowed": dispatch_allowed,
     "blocked_reasons": blocked_reasons,
+    "command_statuses": rcs,
     "tool_failures": tool_failures,
     "parse_failures": parse_failures,
     "schema_failures": schema_failures,
     "inspection_error_envelopes": inspection_error_envelopes,
+    "finding_counts": {
+        "deterministic_errors": len(errors),
+        "warnings": len(warnings),
+        "operator_blocking": len(operator_blocks),
+        "split_review_required": len(split_findings),
+    },
     "deterministic_error_count": len(errors),
     "warning_count": len(warnings),
     "operator_blocking_count": len(operator_blocks),
@@ -580,8 +629,14 @@ else
   BLOCKED=1
 fi
 
-echo "Bead gate artifacts: $ARTIFACT_DIR"
-echo "Dispatch verdict: $VERDICT_JSON"
+if (( JSON_OUTPUT == 1 )); then
+  cat "$VERDICT_JSON"
+  echo "Bead gate artifacts: $ARTIFACT_DIR" >&2
+  echo "Dispatch verdict: $VERDICT_JSON" >&2
+else
+  echo "Bead gate artifacts: $ARTIFACT_DIR"
+  echo "Dispatch verdict: $VERDICT_JSON"
+fi
 if (( BLOCKED == 1 )); then
   if (( OPERATOR_DISPATCH == 1 )); then
     echo "Operator dispatch BLOCKED. Fix prompt: $PROMPT_MD" >&2
@@ -594,8 +649,16 @@ if (( BLOCKED == 1 )); then
 fi
 
 if (( OPERATOR_DISPATCH == 1 )); then
-  echo "Operator dispatch gate passed. Artifacts: $ARTIFACT_DIR"
+  if (( JSON_OUTPUT == 1 )); then
+    echo "Operator dispatch gate passed. Artifacts: $ARTIFACT_DIR" >&2
+  else
+    echo "Operator dispatch gate passed. Artifacts: $ARTIFACT_DIR"
+  fi
 else
-  echo "Bead quality gate passed. Artifacts: $ARTIFACT_DIR"
+  if (( JSON_OUTPUT == 1 )); then
+    echo "Bead quality gate passed. Artifacts: $ARTIFACT_DIR" >&2
+  else
+    echo "Bead quality gate passed. Artifacts: $ARTIFACT_DIR"
+  fi
 fi
 exit 0

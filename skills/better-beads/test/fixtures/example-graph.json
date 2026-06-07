@@ -1,0 +1,38 @@
+{
+  "schema": "better-beads-graph-draft-v1",
+  "issues": [
+    {
+      "key": "authoring-parent",
+      "slug": "authoring-ergonomics",
+      "title": "Improve Better-Beads graph authoring ergonomics",
+      "type": "epic",
+      "priority": 1,
+      "labels": ["better-beads", "authoring-ergonomics"],
+      "description": "## Outcome\nFresh agents can create and dispatch a strong Better-Beads authoring graph.\n\n## Closure contract\nDo not close until every direct child is closed or explicitly closed as unnecessary with evidence.\n\n## Validation\n```bash\nbr dep cycles --json\n```\nExpected: no dependency cycles."
+    },
+    {
+      "key": "cookbook",
+      "slug": "publish-graph-cookbook",
+      "title": "Publish graph construction cookbook",
+      "type": "task",
+      "priority": 1,
+      "labels": ["better-beads", "docs"],
+      "parent": "authoring-parent",
+      "ready_frontier": true,
+      "description": "## Outcome\nAgents have a concise graph construction recipe.\n\n## Success criteria\n- Parent-child and blocking dependency semantics are documented.\n\n## Validation\n```bash\ntest -f skills/better-beads/references/GRAPH-CONSTRUCTION-COOKBOOK.md\n```\nExpected: cookbook exists."
+    },
+    {
+      "key": "helper",
+      "slug": "safe-graph-helper",
+      "title": "Add safe graph draft/apply helper",
+      "type": "feature",
+      "priority": 2,
+      "labels": ["better-beads", "cli"],
+      "parent": "authoring-parent",
+      "description": "## Outcome\nAgents can dry-run a graph draft before mutation.\n\n## Success criteria\n- Dry-run previews issues and dependencies.\n- Apply fails closed before mutation on invalid references.\n\n## Validation\n```bash\nskills/better-beads/scripts/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json\n```\nExpected: JSON preview is parseable."
+    }
+  ],
+  "dependencies": [
+    {"issue": "helper", "depends_on": "cookbook", "type": "blocks"}
+  ]
+}

@@ -138,6 +138,18 @@ Pre-implementation operator dispatch over the active graph:
 ```
 
 Use `--operator-dispatch`, not a staged hook check, before handing beads to implementation agents.
+Use `--operator-dispatch --json` when agents or CI need a stable stdout
+contract instead of human-readable artifact paths:
+
+```bash
+.agents/skills/better-beads/scripts/bead_gate_loop.sh --operator-dispatch --json
+```
+
+The JSON stdout schema is `better-beads-dispatch-verdict-v1`. It includes
+tool/version fields, `dispatch_allowed`, `blocked_reasons`, command statuses,
+deterministic finding counts, parse/schema failures, inspection error
+envelopes, dependency-cycle count, and artifact paths. In JSON mode, prose
+status and repair prompts are written to stderr or artifacts.
 
 Lint only staged bead changes with the low-level Python helper:
 
@@ -173,6 +185,18 @@ Run deterministic gate tests after changing gate behavior:
 python3 .agents/skills/better-beads/scripts/test_bead_quality_gate.py
 bash .agents/skills/better-beads/scripts/test_bead_gate_loop.sh
 ```
+
+Run robot-surface smoke tests after changing command discovery, docs, or
+read-side inspection surfaces:
+
+```bash
+bash .agents/skills/better-beads/scripts/test_cli_robot_surfaces.sh
+```
+
+This smoke test snapshots tracked files before and after read-only robot
+commands, including `bv --robot-plan`, `bv --robot-insights`, route JSON, and
+triage JSON. Any tracked-file drift is a failure; external cache initialization
+must be isolated or documented as an explicit mutation before dispatch.
 
 Emit a human-readable audit report for lane rescue or skill learning:
 
@@ -243,6 +267,12 @@ For implementation dispatch, use the operator gate:
 
 ```bash
 bead_gate_loop.sh --operator-dispatch
+```
+
+For robot callers, prefer:
+
+```bash
+bead_gate_loop.sh --operator-dispatch --json
 ```
 
 The operator gate writes:

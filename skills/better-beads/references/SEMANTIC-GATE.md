@@ -4,6 +4,20 @@ Use this after the deterministic gate when deciding whether a Beads graph is act
 
 Do not run this as a mandatory normal pre-commit hook unless the project explicitly accepts slow/networked hooks. Prefer manual review, CI advisory, or a dedicated `beads-polish` command.
 
+For agents or humans that need the review bundle without assembling temporary
+files by hand, use:
+
+```bash
+skills/better-beads/scripts/better-beads semantic-pack --json
+skills/better-beads/scripts/better-beads semantic-pack --markdown
+```
+
+`semantic-pack` is artifact collection only. It records inspection command
+statuses, embeds the deterministic gate JSON when available, includes this judge
+prompt, and does not call a networked LLM. A blocked gate is included as review
+evidence, not hidden. Semantic review remains explicit/advisory by default and
+is not a normal pre-commit requirement.
+
 ## Inputs to collect
 
 ```bash
@@ -14,6 +28,24 @@ bv --robot-insights > /tmp/bv-insights.json
 python3 .agents/skills/better-beads/scripts/bead_quality_gate.py \
   --operator-dispatch --json --fail-on never > /tmp/bead-quality-gate.json
 ```
+
+These are inspection inputs. Before using them for dispatch, verify the
+read-only robot smoke has passed or otherwise confirm the commands did not
+modify tracked files such as `.gitignore`, `.beads/issues.jsonl`, or skill
+docs. If an external BV run initializes `.bv` ignore state, isolate the run in
+a scratch workspace or make the ignore change an explicit reviewed mutation.
+
+If an agent or CI job needs the full operator dispatch verdict rather than
+only the deterministic findings, collect the shell gate JSON envelope:
+
+```bash
+.agents/skills/better-beads/scripts/bead_gate_loop.sh \
+  --operator-dispatch --json > /tmp/bead-dispatch-verdict.json
+```
+
+The `better-beads-dispatch-verdict-v1` envelope includes the inspected command
+statuses, blocked reasons, finding counts, parse/schema failures, inspection
+error envelopes, dependency-cycle count, and artifact paths needed for repair.
 
 ## Judge prompt
 

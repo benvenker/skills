@@ -18,13 +18,20 @@ Before creating anything, inspect for existing relevant beads:
 br list --json
 br show <id> --json     # for any potentially relevant beads
 bv --robot-plan
+scripts/bead_route.sh --repo . --plan path/to/plan.md --json
 ```
 
 Do not create duplicate beads until existing relevant beads have been ruled out.
+When `--plan` is supplied, the route helper emits `plan_readiness` metadata for
+all create-route decisions. A weak shallow check routes to `improve-plan-first`
+and lists `missing_gates`; a structurally ready plan preserves the normal graph
+state route but still requires semantic review before dispatch.
 
 ## Actions
 
 1. **Inspect** existing beads for relevance before creating anything.
+   Use `CREATE-FROM-RAW-PLAN-QUICKPACK.md` as the compact first-pass checklist
+   when the plan is already structurally ready.
 2. **Design** the proposed graph in plan space first:
    - parent/epic closure contracts,
    - child implementation beads,

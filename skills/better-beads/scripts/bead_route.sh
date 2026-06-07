@@ -3,11 +3,11 @@ set -euo pipefail
 
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-06"
-KNOWN_FLAGS=(--repo --json --version --robot-help -h --help)
+KNOWN_FLAGS=(--repo --plan --json --version --robot-help -h --help)
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bead_route.sh [--repo PATH] [--json]
+Usage: bead_route.sh [--repo PATH] [--plan PATH] [--json]
        bead_route.sh capabilities --json
        bead_route.sh robot-docs guide
 
@@ -21,12 +21,14 @@ Modes:
 
 Options:
   --repo PATH       Repository containing .beads (default: current directory)
+  --plan PATH       Plan/PRD file to shallow-check against create-mode readiness gates
   --json            Emit JSON instead of human-readable output
   --version         Print version and exit
   --robot-help      Print an agent-oriented guide and exit
 
 Examples:
   bead_route.sh --repo . --json
+  bead_route.sh --repo . --plan plan.md --json
   bead_route.sh capabilities --json
 
 Exit codes:
@@ -48,6 +50,28 @@ capabilities_json() {
     "0": "routing recommendation produced",
     "2": "usage error or missing tooling"
   },
+  "schemas": {
+    "better-beads-route-v1": {
+      "stability": "stable",
+      "emitted_by": ["bead_route.sh --json", "bead_route.sh --plan PATH --json", "better-beads route --json"],
+      "required_top_level_fields": ["tool", "schema", "graph_state", "plan_readiness", "recommended_mode", "reasoning", "modes", "next_steps"],
+      "notes": [
+        "contract_version is the helper contract date, not the schema name.",
+        "The better-beads dispatcher delegates route output without wrapping or stamping it."
+      ]
+    },
+    "capabilities-v1": {
+      "stability": "stable",
+      "emitted_by": ["bead_route.sh capabilities --json"],
+      "required_top_level_fields": ["tool", "version", "contract_version", "schemas", "robot_surfaces", "exit_codes"]
+    },
+    "markdown-guide-v1": {
+      "stability": "stable",
+      "emitted_by": ["bead_route.sh robot-docs guide", "bead_route.sh --robot-help"],
+      "format": "markdown",
+      "notes": ["Human-readable guide for robot callers; not JSON."]
+    }
+  },
   "modes": [
     "create-from-raw-plan",
     "improve-plan-first",
@@ -64,10 +88,12 @@ capabilities_json() {
     {"argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
     {"argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"},
     {"argv": ["--robot-help"], "stdout_schema": "markdown-guide-v1"},
-    {"argv": ["--json"], "stdout_schema": "better-beads-route-v1"}
+    {"argv": ["--json"], "stdout_schema": "better-beads-route-v1"},
+    {"argv": ["--plan", "PATH", "--json"], "stdout_schema": "better-beads-route-v1"}
   ],
   "examples": [
     "bead_route.sh --repo . --json",
+    "bead_route.sh --repo . --plan plan.md --json",
     "bead_route.sh capabilities --json"
   ]
 }
@@ -87,15 +113,32 @@ recommends the correct operator mode.
 ```bash
 scripts/better-beads route --json
 scripts/bead_route.sh --repo . --json
+scripts/bead_route.sh --repo . --plan plan.md --json
 scripts/bead_route.sh capabilities --json
 ```
 
 ## Output contract
 
-- JSON mode emits `{ recommended_mode, reasoning, graph_state, modes }`.
+- JSON mode emits `{ tool, schema, graph_state, plan_readiness, recommended_mode, reasoning, modes, next_steps }`.
+- `schema` is `better-beads-route-v1`; `contract_version` appears in `capabilities --json`.
+- `capabilities --json` publishes a `schemas` registry for route JSON, capabilities JSON, and this Markdown guide.
+- `--plan PATH` performs a shallow structural check against create-mode readiness gates.
+- Weak supplied plans route to `improve-plan-first` with missing gates listed.
+- Structurally ready supplied plans preserve the normal graph-state route.
+- `plan_readiness.status` is `not_checked`, `weak`, or `structurally_ready`.
+- `graph_state.cycle_inspection` is `ok` or `failed`.
+- `graph_state.inspection_warnings` records failed cycle inspection details.
+- If graph inspection fails closed, do not consume the route as dispatch authority.
 - Human mode prints the recommendation and next steps.
 - Exit `0` means a recommendation was produced.
-- Exit `2` means usage error or missing tooling.
+- Exit `2` means usage error, missing tooling, or unsafe graph inspection.
+
+## Dispatcher identity
+
+`better-beads route --json` delegates to `bead_route.sh`. It preserves the
+helper's stdout schema and exit code; it does not wrap, stamp, or rename the
+route JSON. Consumers should expect `tool: "bead_route.sh"` in delegated route
+JSON.
 
 ## After routing
 
@@ -174,7 +217,9 @@ case "${1:-}" in
     ;;
 esac
 
-REPO="$(pwd)"
+START_CWD="$(pwd)"
+REPO="$START_CWD"
+PLAN=""
 JSON=0
 
 while (($#)); do
@@ -182,6 +227,11 @@ while (($#)); do
     --repo)
       [[ -n "${2:-}" ]] || { echo "--repo requires a path" >&2; exit 2; }
       REPO="$2"
+      shift 2
+      ;;
+    --plan)
+      [[ -n "${2:-}" ]] || { echo "--plan requires a path" >&2; exit 2; }
+      PLAN="$2"
       shift 2
       ;;
     --json)
@@ -199,19 +249,97 @@ while (($#)); do
 done
 
 REPO="$(cd "$REPO" && pwd)"
+if [[ -n "$PLAN" && "$PLAN" != /* ]]; then
+  PLAN="$START_CWD/$PLAN"
+fi
+if [[ -n "$PLAN" && ! -r "$PLAN" ]]; then
+  echo "--plan path is missing or unreadable: $PLAN" >&2
+  exit 2
+fi
+
+PLAN_READINESS_JSON="$(mktemp "${TMPDIR:-/tmp}/bead-route-plan-readiness.XXXXXX.json")"
+trap 'rm -f "$PLAN_READINESS_JSON"' EXIT
+
+python3 - "$PLAN" "$PLAN_READINESS_JSON" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+plan_path = sys.argv[1]
+out_path = Path(sys.argv[2])
+
+gate_reference = "references/MODE-CREATE-FROM-RAW-PLAN.md#pre-mutation-readiness-gates"
+gates = [
+    ("outcome", ["outcome", "goal", "behavior", "system truth"]),
+    ("anchors", ["anchor", "surface", "contract", "file", "symbol", "state transition"]),
+    ("validation", ["validation", "verify", "test", "smoke", "regression", "check"]),
+    ("failure_behavior", ["failure behavior", "error", "fallback", "fail-closed", "blocked", "no-op"]),
+    ("non_goals", ["non-goal", "non-goals", "out of scope", "do not"]),
+    ("parent_child_shape", ["parent", "child", "children", "closure", "roll-up", "rollup"]),
+    ("dependency_order", ["dependency", "dependencies", "order", "before", "after", "blocks", "blocked"]),
+]
+
+result = {
+    "check_required": True,
+    "gate_reference": gate_reference,
+    "required_gates": [name for name, _ in gates],
+    "alternate_mode_if_weak": "improve-plan-first",
+    "status": "not_checked",
+    "plan_path": None,
+    "missing_gates": [],
+    "check_kind": "shallow_term_presence",
+    "note": "This check only verifies structural section/term presence; it is not semantic plan review.",
+}
+
+if plan_path:
+    path = Path(plan_path)
+    text = path.read_text(errors="replace")
+    normalized = re.sub(r"[_-]+", " ", text.lower())
+    missing = []
+    for name, needles in gates:
+        if not any(needle in normalized for needle in needles):
+            missing.append(name)
+    result["plan_path"] = str(path)
+    result["missing_gates"] = missing
+    result["status"] = "structurally_ready" if not missing else "weak"
+
+out_path.write_text(json.dumps(result), encoding="utf-8")
+PY
 
 # No .beads directory — recommend create-from-raw-plan
 if [[ ! -d "$REPO/.beads" ]]; then
-  python3 - "$JSON" <<'PY'
+  python3 - "$JSON" "$PLAN_READINESS_JSON" <<'PY'
 import json, sys
 emit_json = sys.argv[1] == "1"
+with open(sys.argv[2]) as f:
+    plan_readiness = json.load(f)
+
+mode = "create-from-raw-plan"
+reasoning = "No .beads directory found. Use create-from-raw-plan if you have a ready plan, or improve-plan-first if the plan needs strengthening."
+if plan_readiness["status"] == "weak":
+    mode = "improve-plan-first"
+    missing = ", ".join(plan_readiness["missing_gates"])
+    reasoning = f"Supplied --plan is structurally weak; missing readiness gate(s): {missing}. Strengthen the plan before creating beads."
 
 modes = [
-    {"mode": "create-from-raw-plan", "reference": "references/MODE-CREATE-FROM-RAW-PLAN.md", "recommended": True},
-    {"mode": "improve-plan-first", "reference": "references/MODE-IMPROVE-PLAN-FIRST.md", "recommended": False},
+    {"mode": "create-from-raw-plan", "reference": "references/MODE-CREATE-FROM-RAW-PLAN.md", "recommended": mode == "create-from-raw-plan"},
+    {"mode": "improve-plan-first", "reference": "references/MODE-IMPROVE-PLAN-FIRST.md", "recommended": mode == "improve-plan-first"},
     {"mode": "polish-existing-graph", "reference": "references/MODE-POLISH-EXISTING-GRAPH.md", "recommended": False},
     {"mode": "closeout", "reference": "references/MODE-CLOSEOUT.md", "recommended": False},
 ]
+
+next_steps = [
+    "Read references/MODE-CREATE-FROM-RAW-PLAN.md for the full mode procedure",
+    "If the plan is weak or under-grounded, read references/MODE-IMPROVE-PLAN-FIRST.md instead",
+    "Initialize beads with: br init"
+]
+if mode == "improve-plan-first":
+    next_steps = [
+        "Read references/MODE-IMPROVE-PLAN-FIRST.md for the full mode procedure",
+        "Add the missing readiness gates before creating beads",
+        "Re-run bead_route.sh --plan PATH --json after strengthening the plan"
+    ]
 
 if emit_json:
     print(json.dumps({
@@ -226,26 +354,25 @@ if emit_json:
             "cycle_inspection": "ok",
             "inspection_warnings": [],
         },
-        "recommended_mode": "create-from-raw-plan",
-        "reasoning": "No .beads directory found. Use create-from-raw-plan if you have a ready plan, or improve-plan-first if the plan needs strengthening.",
+        "plan_readiness": plan_readiness,
+        "recommended_mode": mode,
+        "reasoning": reasoning,
         "modes": modes,
-        "next_steps": [
-            "Read references/MODE-CREATE-FROM-RAW-PLAN.md for the full mode procedure",
-            "If the plan is weak or under-grounded, read references/MODE-IMPROVE-PLAN-FIRST.md instead",
-            "Initialize beads with: br init"
-        ],
+        "next_steps": next_steps,
     }, indent=2))
 else:
     print("Better Beads route: no .beads directory found")
     print()
-    print("Recommended mode: create-from-raw-plan")
-    print("  Use create-from-raw-plan if you have a ready plan.")
-    print("  Use improve-plan-first if the plan needs strengthening.")
+    print(f"Recommended mode: {mode}")
+    print(f"  {reasoning}")
+    if plan_readiness["status"] != "not_checked":
+        print(f"  Plan readiness: {plan_readiness['status']}")
+        if plan_readiness["missing_gates"]:
+            print(f"  Missing gates: {', '.join(plan_readiness['missing_gates'])}")
     print()
     print("Next steps:")
-    print("  1. Read references/MODE-CREATE-FROM-RAW-PLAN.md")
-    print("  2. Or read references/MODE-IMPROVE-PLAN-FIRST.md if plan is weak")
-    print("  3. Initialize beads: br init")
+    for i, step in enumerate(next_steps, 1):
+        print(f"  {i}. {step}")
 PY
   exit 0
 fi
@@ -260,7 +387,7 @@ BEADS_JSON="$(mktemp "${TMPDIR:-/tmp}/bead-route-list.XXXXXX.json")"
 BEADS_ERR="$(mktemp "${TMPDIR:-/tmp}/bead-route-list.XXXXXX.err")"
 CYCLES_JSON="$(mktemp "${TMPDIR:-/tmp}/bead-route-cycles.XXXXXX.json")"
 CYCLES_ERR="$(mktemp "${TMPDIR:-/tmp}/bead-route-cycles.XXXXXX.err")"
-trap 'rm -f "$BEADS_JSON" "$BEADS_ERR" "$CYCLES_JSON" "$CYCLES_ERR"' EXIT
+trap 'rm -f "$PLAN_READINESS_JSON" "$BEADS_JSON" "$BEADS_ERR" "$CYCLES_JSON" "$CYCLES_ERR"' EXIT
 
 cd "$REPO"
 if ! br list --json >"$BEADS_JSON" 2>"$BEADS_ERR"; then
@@ -276,7 +403,7 @@ if ! br dep cycles --json >"$CYCLES_JSON" 2>"$CYCLES_ERR"; then
   CYCLE_INSPECTION="failed"
 fi
 
-python3 - "$BEADS_JSON" "$CYCLES_JSON" "$JSON" "$CYCLE_INSPECTION" "$CYCLES_ERR" <<'PY'
+python3 - "$BEADS_JSON" "$CYCLES_JSON" "$JSON" "$CYCLE_INSPECTION" "$CYCLES_ERR" "$PLAN_READINESS_JSON" <<'PY'
 import json
 import sys
 
@@ -285,6 +412,8 @@ cycles_path = sys.argv[2]
 emit_json = sys.argv[3] == "1"
 cycle_inspection = sys.argv[4]
 cycles_err_path = sys.argv[5]
+with open(sys.argv[6]) as f:
+    plan_readiness = json.load(f)
 
 # Parse beads
 try:
@@ -396,6 +525,11 @@ if cycle_count is not None and cycle_count > 0:
 elif cycle_inspection == "failed":
     reasoning += " WARNING: dependency cycle inspection failed; cycle safety is unknown."
 
+if plan_readiness["status"] == "weak":
+    missing = ", ".join(plan_readiness["missing_gates"])
+    mode = "improve-plan-first"
+    reasoning = f"Supplied --plan is structurally weak; missing readiness gate(s): {missing}. Strengthen the plan before bead creation or graph mutation."
+
 has_cycles = cycle_count is not None and cycle_count > 0
 
 graph_state = {
@@ -420,6 +554,9 @@ next_steps = [f"Read {ref_file} for the full mode procedure"]
 
 if mode == "create-from-raw-plan":
     next_steps.append("If the plan is weak, read references/MODE-IMPROVE-PLAN-FIRST.md instead")
+elif mode == "improve-plan-first":
+    next_steps.append("Add the missing readiness gates before creating or mutating beads from the plan")
+    next_steps.append("Re-run bead_route.sh --plan PATH --json after strengthening the plan")
 elif mode == "polish-existing-graph":
     next_steps.append("Inspect beads: br list --json")
     next_steps.append("Check graph insights: bv --robot-insights")
@@ -437,6 +574,7 @@ if emit_json:
         "tool": "bead_route.sh",
         "schema": "better-beads-route-v1",
         "graph_state": graph_state,
+        "plan_readiness": plan_readiness,
         "recommended_mode": mode,
         "reasoning": reasoning,
         "modes": modes,
@@ -452,6 +590,10 @@ else:
     print()
     print(f"Recommended mode: {mode}")
     print(f"  {reasoning}")
+    if plan_readiness["status"] != "not_checked":
+        print(f"  Plan readiness: {plan_readiness['status']}")
+        if plan_readiness["missing_gates"]:
+            print(f"  Missing gates: {', '.join(plan_readiness['missing_gates'])}")
     print()
     print("Next steps:")
     for i, step in enumerate(next_steps, 1):

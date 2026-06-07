@@ -15,7 +15,7 @@ python3 -m py_compile skills/better-beads/scripts/bead_quality_gate.py skills/be
 python3 skills/better-beads/scripts/test_bead_quality_gate.py
 bash skills/better-beads/scripts/test_bead_gate_loop.sh
 bash skills/better-beads/scripts/test_cli_robot_surfaces.sh
-TARGET=/Users/ben/code/skills/skills/better-beads bash skills/better-beads/agent_ergonomics_audit/audit/regression_tests/R-001__cli_robot_surfaces.test.sh
+TARGET=skills/better-beads bash skills/better-beads/agent_ergonomics_audit/audit/regression_tests/R-001__cli_robot_surfaces.test.sh
 ```
 
 All passed.
@@ -27,4 +27,3 @@ All passed.
 ## Review follow-up
 
 Oracle review flagged two issues before wrap-up: bare `better-beads` recommendations without a bin shim, and lossy corrected-command breadcrumbs. This pass fixed both by emitting path-qualified dispatcher commands from `triage --json` and rebuilding corrected commands around the exact unknown token. The smoke test now covers arbitrary-CWD dispatcher delegation.
-

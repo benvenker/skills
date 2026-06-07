@@ -4,6 +4,9 @@ Good bead content is not enough. Beads must also be pleasant to scan in `bv`, `b
 
 The goal is **dense but skimmable execution packets**, not prose walls.
 
+For parent/child graph construction commands and dependency semantics, read
+`GRAPH-CONSTRUCTION-COOKBOOK.md` before creating or repairing a graph.
+
 ## Core rule
 
 Prefer short sections with bullet lists over paragraphs.
@@ -250,6 +253,11 @@ Length is justified when it prevents a concrete failure: scope creep, wrong file
 Formatting and sizing are connected. If a child bead is likely to produce a large PR because it combines contract design, service implementation, access control, routing, and parity/docs, split it by behavior before polishing prose.
 
 A child bead should describe one independently testable functional behavior, not a broad surface bucket, checklist bucket, or detail bucket. A broad noun like “dashboard” usually belongs to a parent/epic closure contract; a behavior like “filtered load graphs render correct series and empty/error states” is closer to child-sized.
+
+If a child must wait for another child, represent that order with a default
+`br dep add <later-child> <earlier-child>` edge. Do not encode implementation
+order as `parent-child`; reserve parent-child edges for roll-up ownership and
+closure contracts.
 
 When operator-dispatch writes `split-review-required.md`, write the repair evidence in the bead or close reason so another agent can act without the original conversation:
 

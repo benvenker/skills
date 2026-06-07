@@ -4,7 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOOP="$SCRIPT_DIR/bead_gate_loop.sh"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/bead-gate-loop-test.XXXXXX")"
-trap 'rm -rf "$TMP_ROOT"' EXIT
+if [[ "${KEEP_BEAD_GATE_LOOP_TEST_TMP:-0}" == "1" ]]; then
+  trap 'printf "Leaving bead gate loop test temp root at %s\n" "$TMP_ROOT" >&2' EXIT
+else
+  trap 'rm -rf "$TMP_ROOT"' EXIT
+fi
 
 FAKE_BIN="$TMP_ROOT/bin"
 mkdir -p "$FAKE_BIN"
@@ -139,6 +143,26 @@ PASS_OUTPUT="$(PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$PASS_REPO" --operator-dis
 PASS_VERDICT="$(printf '%s\n' "$PASS_OUTPUT" | extract_verdict)"
 [[ -f "$PASS_VERDICT" ]]
 assert_json_bool "$PASS_VERDICT" dispatch_allowed true
+PASS_JSON_STDOUT="$(PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$PASS_REPO" --operator-dispatch --json 2>"$TMP_ROOT/pass-json.stderr")"
+python3 - "$PASS_JSON_STDOUT" "$TMP_ROOT/pass-json.stderr" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+stderr = open(sys.argv[2], encoding="utf-8").read()
+assert payload["schema"] == "better-beads-dispatch-verdict-v1", payload
+assert payload["tool"] == "bead_gate_loop.sh", payload
+assert payload["version"], payload
+assert payload["contract_version"], payload
+assert payload["dispatch_allowed"] is True, payload
+assert payload["operator_dispatch"] is True, payload
+assert payload["blocked_reasons"] == [], payload
+assert payload["command_statuses"]["br_dep_cycles"] == 0, payload
+assert payload["finding_counts"]["deterministic_errors"] == 0, payload
+assert payload["artifacts"]["dispatch_verdict_json"], payload
+assert "Operator dispatch gate passed" in stderr, stderr
+assert "Operator dispatch gate passed" not in sys.argv[1], payload
+PY
 
 BLOCK_REPO="$TMP_ROOT/block-repo"
 write_repo "$BLOCK_REPO" 1
@@ -159,6 +183,24 @@ split_path = payload["artifacts"]["split_review_markdown"]
 text = open(split_path, encoding="utf-8").read()
 assert "Operator Split Review Required" in text
 assert "bd-loop" in text
+PY
+set +e
+BLOCK_JSON_STDOUT="$(PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$BLOCK_REPO" --operator-dispatch --json 2>"$TMP_ROOT/block-json.stderr")"
+BLOCK_JSON_RC=$?
+set -e
+[[ "$BLOCK_JSON_RC" -eq 2 ]]
+python3 - "$BLOCK_JSON_STDOUT" "$TMP_ROOT/block-json.stderr" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+stderr = open(sys.argv[2], encoding="utf-8").read()
+assert payload["schema"] == "better-beads-dispatch-verdict-v1", payload
+assert payload["dispatch_allowed"] is False, payload
+assert "split-review-required" in payload["blocked_reasons"], payload
+assert payload["finding_counts"]["split_review_required"] > 0, payload
+assert "Operator dispatch BLOCKED" in stderr, stderr
+assert "Operator dispatch BLOCKED" not in sys.argv[1], payload
 PY
 
 BAD_JSON_REPO="$TMP_ROOT/bad-json-repo"

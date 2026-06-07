@@ -4,7 +4,7 @@ set -euo pipefail
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-06"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard route triage capabilities robot-docs help)
+KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard route authoring-triage frontier create-graph semantic-pack triage capabilities robot-docs help)
 
 usage() {
   cat >&2 <<'EOF'
@@ -17,6 +17,12 @@ Commands:
   quality-gate [args]       Run bead_quality_gate.py with args
   gate-loop [args]          Run bead_gate_loop.sh with args
   closeout-guard [args]     Run bead_closeout_guard.sh with args
+  authoring-triage --json   Print the first read-only authoring packet
+  frontier --json           Show graph-ready work, blocked work, and ready-label truth
+  create-graph --dry-run F   Preview safe graph creation from a reviewed draft
+  create-graph --apply F     Apply a reviewed graph draft through br
+  semantic-pack --json      Collect graph review artifacts as portable JSON
+  semantic-pack --markdown  Collect graph review artifacts as Markdown
   triage --json             Print quick command recommendations as JSON
   capabilities --json       Print machine-readable CLI contract
   robot-docs guide          Print an agent-oriented guide
@@ -25,8 +31,13 @@ Commands:
 Examples:
   better-beads capabilities --json
   better-beads route --json
+  better-beads authoring-triage --json
   better-beads triage --json
   better-beads quality-gate --repo . --json
+  better-beads frontier --json
+  better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json
+  better-beads semantic-pack --json
+  better-beads semantic-pack --markdown
   better-beads gate-loop --repo . --operator-dispatch
   better-beads closeout-guard --repo . --json
 
@@ -49,25 +60,40 @@ capabilities_json() {
   "exit_codes": {
     "0": "success",
     "2": "usage error or unknown command",
-    "delegated": "quality-gate, gate-loop, closeout-guard, and route preserve delegated exit codes"
+    "delegated": "quality-gate, gate-loop, closeout-guard, route, and create-graph preserve delegated exit codes"
   },
   "robot_surfaces": [
     {"argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
     {"argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"},
     {"argv": ["triage", "--json"], "stdout_schema": "better-beads-triage-v1"},
-    {"argv": ["route", "--json"], "stdout_schema": "better-beads-route-v1"}
+    {"argv": ["authoring-triage", "--json"], "stdout_schema": "better-beads-authoring-triage-v1"},
+    {"argv": ["route", "--json"], "stdout_schema": "better-beads-route-v1"},
+    {"argv": ["frontier", "--json"], "stdout_schema": "better-beads-frontier-v1"},
+    {"argv": ["create-graph", "--dry-run", "PATH"], "stdout_schema": "better-beads-create-graph-preview-v1"},
+    {"argv": ["create-graph", "--apply", "PATH"], "stdout_schema": "better-beads-create-graph-apply-v1"},
+    {"argv": ["semantic-pack", "--json"], "stdout_schema": "better-beads-semantic-pack-v1"},
+    {"argv": ["semantic-pack", "--markdown"], "stdout_schema": "markdown"}
   ],
   "commands": [
     {"name": "route", "delegates_to": "bead_route.sh"},
     {"name": "quality-gate", "delegates_to": "bead_quality_gate.py"},
     {"name": "gate-loop", "delegates_to": "bead_gate_loop.sh"},
     {"name": "closeout-guard", "delegates_to": "bead_closeout_guard.sh"},
+    {"name": "authoring-triage", "argv": ["authoring-triage", "--json"], "stdout_schema": "better-beads-authoring-triage-v1"},
+    {"name": "frontier", "argv": ["frontier", "--json"], "stdout_schema": "better-beads-frontier-v1"},
+    {"name": "create-graph", "delegates_to": "bead_create_graph.py"},
+    {"name": "semantic-pack", "argv": ["semantic-pack", "--json"], "stdout_schema": "better-beads-semantic-pack-v1"},
     {"name": "triage", "argv": ["triage", "--json"], "stdout_schema": "better-beads-triage-v1"},
     {"name": "capabilities", "argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
     {"name": "robot-docs", "argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"}
   ],
   "examples": [
     "bash $SCRIPT_DIR/better-beads route --json",
+    "bash $SCRIPT_DIR/better-beads authoring-triage --json",
+    "bash $SCRIPT_DIR/better-beads frontier --json",
+    "bash $SCRIPT_DIR/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json",
+    "bash $SCRIPT_DIR/better-beads semantic-pack --json",
+    "bash $SCRIPT_DIR/better-beads semantic-pack --markdown",
     "bash $SCRIPT_DIR/better-beads triage --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
@@ -84,24 +110,801 @@ triage_json() {
   "schema": "better-beads-triage-v1",
   "quick_ref": [
     "Use route to inspect graph state and choose an operator mode before mutation.",
+    "Use authoring-triage --json as the stable first packet after skill load.",
+    "Use frontier to inspect graph-ready work and ready-for-agent label truth.",
+    "Use create-graph --dry-run to preview reviewed graph drafts before any br mutation.",
+    "Use semantic-pack to collect graph review artifacts for human or oracle review.",
     "Use quality-gate for deterministic bead description checks.",
     "Use gate-loop before dispatching implementation agents.",
     "Use closeout-guard before ending implementation/operator swarms."
   ],
   "recommended_commands": [
     "bash $SCRIPT_DIR/better-beads route --json",
+    "bash $SCRIPT_DIR/better-beads authoring-triage --json",
+    "bash $SCRIPT_DIR/better-beads frontier --json",
+    "bash $SCRIPT_DIR/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json",
+    "bash $SCRIPT_DIR/better-beads semantic-pack --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
     "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json"
   ],
   "delegates": {
     "route": "scripts/bead_route.sh",
+    "authoring-triage": "scripts/better-beads authoring-triage --json",
+    "create-graph": "scripts/bead_create_graph.py",
+    "semantic-pack": "scripts/better-beads semantic-pack --json",
     "quality-gate": "scripts/bead_quality_gate.py",
     "gate-loop": "scripts/bead_gate_loop.sh",
     "closeout-guard": "scripts/bead_closeout_guard.sh"
   }
 }
 EOF
+}
+
+authoring_triage_json() {
+  python3 - "$CONTRACT_VERSION" "$SCRIPT_DIR" "$@" <<'PY'
+from __future__ import annotations
+
+import difflib
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+contract_version = sys.argv[1]
+script_dir = Path(sys.argv[2])
+args = sys.argv[3:]
+repo = Path.cwd()
+plan_path: Path | None = None
+emit_json = False
+supported_flags = ["--json", "--repo", "--plan"]
+
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == "--json":
+        emit_json = True
+        i += 1
+    elif arg == "--repo":
+        if i + 1 >= len(args):
+            print("--repo requires a path", file=sys.stderr)
+            sys.exit(2)
+        repo = Path(args[i + 1])
+        i += 2
+    elif arg == "--plan":
+        if i + 1 >= len(args):
+            print("--plan requires a path", file=sys.stderr)
+            sys.exit(2)
+        plan_path = Path(args[i + 1])
+        i += 2
+    else:
+        print(f"Unknown authoring-triage option: {arg}", file=sys.stderr)
+        match = difflib.get_close_matches(arg, supported_flags, n=1, cutoff=0.65)
+        if match:
+            print(f"Did you mean: {match[0]}", file=sys.stderr)
+        print("Use: better-beads authoring-triage [--repo PATH] [--plan PATH] --json", file=sys.stderr)
+        sys.exit(2)
+
+if not emit_json:
+    print("Use: better-beads authoring-triage [--repo PATH] [--plan PATH] --json", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    repo = repo.resolve()
+except Exception as exc:
+    print(f"could not resolve repo path: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+if not repo.exists():
+    print(f"repo path does not exist: {repo}", file=sys.stderr)
+    sys.exit(2)
+
+resolved_plan: Path | None = None
+if plan_path is not None:
+    resolved_plan = (repo / plan_path).resolve() if not plan_path.is_absolute() else plan_path.resolve()
+    if not resolved_plan.exists():
+        print(f"plan path does not exist: {resolved_plan}", file=sys.stderr)
+        sys.exit(2)
+    if not resolved_plan.is_file():
+        print(f"plan path is not a file: {resolved_plan}", file=sys.stderr)
+        sys.exit(2)
+
+
+def stderr_snippet(text: str) -> str:
+    lines = [line for line in text.strip().splitlines() if line.strip()]
+    return "\n".join(lines[:16])
+
+
+def run_json(name: str, argv: list[str], *, required: bool = True) -> dict[str, Any]:
+    result = subprocess.run(
+        argv,
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    record: dict[str, Any] = {
+        "name": name,
+        "command": argv,
+        "returncode": result.returncode,
+        "stderr": stderr_snippet(result.stderr),
+        "stdout_bytes": len(result.stdout.encode()),
+        "parse_error": None,
+        "json": None,
+    }
+    if result.stdout.strip():
+        try:
+            record["json"] = json.loads(result.stdout)
+        except Exception as exc:
+            record["parse_error"] = str(exc)
+    if required and (record["returncode"] != 0 or record["parse_error"]):
+        print(f"{name} failed; authoring triage cannot safely summarize the graph", file=sys.stderr)
+        if record["stderr"]:
+            print(record["stderr"], file=sys.stderr)
+        if record["parse_error"]:
+            print(f"parse error: {record['parse_error']}", file=sys.stderr)
+        sys.exit(2)
+    return record
+
+
+def issue_list(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [issue for issue in payload if isinstance(issue, dict)]
+    if isinstance(payload, dict):
+        issues = payload.get("issues", [])
+        if isinstance(issues, list):
+            return [issue for issue in issues if isinstance(issue, dict)]
+    return []
+
+
+def normalize_list(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("issues", "ready", "blocked", "items"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def summarize_command(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "command": record["command"],
+        "returncode": record["returncode"],
+        "stderr": record["stderr"],
+        "parse_error": record["parse_error"],
+        "stdout_bytes": record["stdout_bytes"],
+    }
+
+
+route_argv = ["bash", str(script_dir / "bead_route.sh"), "--repo", str(repo), "--json"]
+if resolved_plan is not None:
+    route_argv.extend(["--plan", str(resolved_plan)])
+route_record = run_json("route", route_argv)
+route_json = route_record["json"] if isinstance(route_record["json"], dict) else {}
+graph_state = route_json.get("graph_state") if isinstance(route_json.get("graph_state"), dict) else {}
+has_beads = bool(graph_state.get("has_beads_dir"))
+
+records: dict[str, dict[str, Any]] = {"route": route_record}
+issues: list[dict[str, Any]] = []
+ready_items: list[dict[str, Any]] = []
+blocked_items: list[dict[str, Any]] = []
+plan_summary: dict[str, Any] = {"state": "skipped", "reason": "no .beads directory"}
+
+if has_beads:
+    records["br_list"] = run_json("br_list", ["br", "list", "--json"])
+    records["br_ready"] = run_json("br_ready", ["br", "ready", "--json"])
+    records["br_blocked"] = run_json("br_blocked", ["br", "blocked", "--json"])
+    records["bv_robot_plan"] = run_json("bv_robot_plan", ["bv", "--robot-plan"])
+    issues = issue_list(records["br_list"]["json"])
+    ready_items = normalize_list(records["br_ready"]["json"])
+    blocked_items = normalize_list(records["br_blocked"]["json"])
+    bv_payload = records["bv_robot_plan"]["json"]
+    plan = bv_payload.get("plan", {}) if isinstance(bv_payload, dict) else {}
+    tracks = plan.get("tracks", []) if isinstance(plan, dict) else []
+    plan_summary = {
+        "state": "computed",
+        "track_count": len(tracks),
+        "total_actionable": plan.get("total_actionable") if isinstance(plan, dict) else None,
+        "total_blocked": plan.get("total_blocked") if isinstance(plan, dict) else None,
+        "highest_impact": (plan.get("summary") or {}).get("highest_impact") if isinstance(plan, dict) else None,
+    }
+
+active_issues = [issue for issue in issues if issue.get("status") not in {"closed", "archived"}]
+in_progress_ids = [issue.get("id") for issue in active_issues if issue.get("status") == "in_progress" and issue.get("id")]
+selected_mode = route_json.get("recommended_mode")
+mode_ref = None
+for mode in route_json.get("modes", []):
+    if isinstance(mode, dict) and mode.get("mode") == selected_mode:
+        mode_ref = mode.get("reference")
+        break
+
+quickpack = script_dir.parent / "references" / "CREATE-FROM-RAW-PLAN-QUICKPACK.md"
+quickpack_path = None
+if selected_mode == "create-from-raw-plan" and quickpack.exists():
+    quickpack_path = "references/CREATE-FROM-RAW-PLAN-QUICKPACK.md"
+
+blockers: list[str] = []
+if graph_state.get("cycle_inspection") == "failed":
+    blockers.append("cycle-inspection-failed")
+if graph_state.get("has_cycles"):
+    blockers.append("dependency-cycles-present")
+if graph_state.get("inspection_warnings"):
+    blockers.append("graph-inspection-warnings")
+plan_readiness = route_json.get("plan_readiness") if isinstance(route_json.get("plan_readiness"), dict) else {}
+if plan_readiness.get("status") == "weak":
+    blockers.append("plan-readiness-weak")
+
+mode_command = f"Read {mode_ref}" if mode_ref else "Inspect selected mode reference"
+next_commands = [
+    f"bash {script_dir / 'better-beads'} route --json",
+    mode_command,
+    "br list --json",
+    "bv --robot-plan",
+    f"bash {script_dir / 'better-beads'} frontier --json",
+    f"bash {script_dir / 'better-beads'} quality-gate --repo {repo} --report markdown --fail-on never",
+    f"bash {script_dir / 'better-beads'} gate-loop --repo {repo} --operator-dispatch",
+    f"bash {script_dir / 'better-beads'} closeout-guard --repo {repo} --json",
+]
+if resolved_plan is not None:
+    next_commands[0] = f"bash {script_dir / 'better-beads'} route --plan {resolved_plan} --json"
+if quickpack_path:
+    next_commands.insert(2, f"Read {quickpack_path}")
+
+payload = {
+    "tool": "better-beads",
+    "schema": "better-beads-authoring-triage-v1",
+    "contract_version": contract_version,
+    "repo": str(repo),
+    "inputs": {
+        "plan_path": str(resolved_plan) if resolved_plan is not None else None,
+    },
+    "route": route_json,
+    "selected_mode": {
+        "name": selected_mode,
+        "reference": mode_ref,
+        "quickpack_path": quickpack_path,
+        "reasoning": route_json.get("reasoning"),
+    },
+    "graph_inspection": {
+        "graph_state": graph_state,
+        "issue_count": len(issues) if has_beads else graph_state.get("total_beads", 0),
+        "active_count": len(active_issues),
+        "ready_count": len(ready_items),
+        "blocked_count": len(blocked_items),
+        "in_progress_ids": in_progress_ids,
+        "bv_plan_summary": plan_summary,
+    },
+    "plan_readiness": plan_readiness,
+    "mutation_eligibility": {
+        "authoring_triage_is_read_only": True,
+        "may_mutate_after_mode_review_and_gates": not blockers,
+        "blockers": blockers,
+        "note": "This command never mutates Beads; it only reports whether later operator mutation is blocked by inspection findings.",
+    },
+    "required_gates": [
+        {"name": "route", "command": "scripts/better-beads route --json"},
+        {"name": "dependency_cycles", "command": "br dep cycles --json"},
+        {"name": "graph_plan", "command": "bv --robot-plan"},
+        {"name": "graph_insights", "command": "bv --robot-insights"},
+        {"name": "quality_gate", "command": "scripts/better-beads quality-gate --repo . --report markdown --fail-on never"},
+        {"name": "operator_dispatch", "command": "scripts/better-beads gate-loop --repo . --operator-dispatch"},
+        {"name": "closeout_guard", "command": "scripts/better-beads closeout-guard --repo . --json"},
+    ],
+    "next_commands": next_commands,
+    "command_statuses": {name: summarize_command(record) for name, record in records.items()},
+}
+
+print(json.dumps(payload, indent=2))
+PY
+}
+
+frontier_json() {
+  python3 - "$CONTRACT_VERSION" "$@" <<'PY'
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+contract_version = sys.argv[1]
+args = sys.argv[2:]
+repo = Path.cwd()
+emit_json = False
+
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == "--json":
+        emit_json = True
+        i += 1
+    elif arg == "--repo":
+        if i + 1 >= len(args):
+            print("--repo requires a path", file=sys.stderr)
+            sys.exit(2)
+        repo = Path(args[i + 1])
+        i += 2
+    else:
+        print(f"Unknown frontier option: {arg}", file=sys.stderr)
+        print("Use: better-beads frontier [--repo PATH] --json", file=sys.stderr)
+        sys.exit(2)
+
+if not emit_json:
+    print("Use: better-beads frontier [--repo PATH] --json", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    repo = repo.resolve()
+except Exception as exc:
+    print(f"could not resolve repo path: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+if not repo.exists():
+    print(f"repo path does not exist: {repo}", file=sys.stderr)
+    sys.exit(2)
+
+
+def run_json(name: str, argv: list[str]) -> tuple[Any, dict[str, Any]]:
+    result = subprocess.run(
+        argv,
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    status = {
+        "command": argv,
+        "returncode": result.returncode,
+        "stderr": result.stderr.strip(),
+    }
+    if result.returncode != 0:
+        print(f"{name} failed with exit {result.returncode}", file=sys.stderr)
+        if result.stderr.strip():
+            print(result.stderr.strip(), file=sys.stderr)
+        sys.exit(2)
+    try:
+        return json.loads(result.stdout), status
+    except Exception as exc:
+        print(f"{name} returned malformed JSON: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+
+def issue_list(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [issue for issue in payload if isinstance(issue, dict)]
+    if isinstance(payload, dict):
+        issues = payload.get("issues", [])
+        if isinstance(issues, list):
+            return [issue for issue in issues if isinstance(issue, dict)]
+    print("br list --json returned unsupported JSON shape", file=sys.stderr)
+    sys.exit(2)
+
+
+def normalize_list(payload: Any, command: str) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("issues", "ready", "blocked", "items"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    print(f"{command} returned unsupported JSON shape", file=sys.stderr)
+    sys.exit(2)
+
+
+def issue_summary(issue: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": issue.get("id"),
+        "title": issue.get("title"),
+        "status": issue.get("status"),
+        "priority": issue.get("priority"),
+        "type": issue.get("issue_type") or issue.get("type"),
+        "labels": issue.get("labels") or [],
+    }
+
+
+def is_active(issue: dict[str, Any]) -> bool:
+    return issue.get("status") not in {"closed", "archived"}
+
+
+def is_parent(issue: dict[str, Any]) -> bool:
+    labels = set(issue.get("labels") or [])
+    desc = (issue.get("description") or "").lower()
+    return (
+        issue.get("issue_type") == "epic"
+        or "parent" in labels
+        or "closure contract" in desc
+        or "parent acceptance criteria" in desc
+    )
+
+
+def single_owner_notes(issue: dict[str, Any]) -> list[str]:
+    notes: list[str] = []
+    for line in (issue.get("description") or "").splitlines():
+        lowered = line.lower()
+        if "single-owner" in lowered or "single owner" in lowered:
+            notes.append(line.strip().lstrip("- ").strip())
+    return notes
+
+
+if not (repo / ".beads").exists():
+    print(json.dumps({
+        "tool": "better-beads",
+        "schema": "better-beads-frontier-v1",
+        "contract_version": contract_version,
+        "repo": str(repo),
+        "graph_state": {
+            "has_beads_dir": False,
+            "issue_count": 0,
+            "active_count": 0,
+            "ready_count": 0,
+            "blocked_count": 0,
+        },
+        "readiness_model": {
+            "graph_theoretic_ready": "Reported from br ready --json when a graph exists.",
+            "semantic_readiness": "Not asserted by this command; run semantic review/gates before dispatch.",
+            "label_truth": "`ready-for-agent` is audited, never mutated.",
+        },
+        "actionable_ready": [],
+        "blocked_beads": [],
+        "ready_label_audit": {
+            "valid_ready_labels": [],
+            "stale_or_invalid_ready_labels": [],
+            "unlabeled_ready_candidates": [],
+        },
+        "deterministic_warnings": {
+            "parent_closure_blockers": [],
+            "single_owner_surface_warnings": [],
+        },
+        "inspections": {
+            "br_list": {"state": "skipped", "reason": "no .beads directory"},
+            "br_ready": {"state": "skipped", "reason": "no .beads directory"},
+            "br_blocked": {"state": "skipped", "reason": "no .beads directory"},
+            "bv_robot_plan": {"state": "skipped", "reason": "no .beads directory"},
+        },
+    }, indent=2))
+    sys.exit(0)
+
+list_payload, list_status = run_json("br list --json", ["br", "list", "--json"])
+ready_payload, ready_status = run_json("br ready --json", ["br", "ready", "--json"])
+blocked_payload, blocked_status = run_json("br blocked --json", ["br", "blocked", "--json"])
+plan_payload, plan_status = run_json("bv --robot-plan", ["bv", "--robot-plan"])
+
+issues = issue_list(list_payload)
+ready_items = normalize_list(ready_payload, "br ready --json")
+blocked_items = normalize_list(blocked_payload, "br blocked --json")
+issues_by_id = {issue.get("id"): issue for issue in issues if issue.get("id")}
+ready_ids = {item.get("id") for item in ready_items if item.get("id")}
+blocked_by = {
+    item.get("id"): item.get("blocked_by") or []
+    for item in blocked_items
+    if item.get("id")
+}
+
+active_issues = [issue for issue in issues if is_active(issue)]
+ready_label = "ready-for-agent"
+ready_labeled = [
+    issue for issue in active_issues
+    if ready_label in set(issue.get("labels") or [])
+]
+
+actionable_ready = []
+for item in ready_items:
+    issue = issues_by_id.get(item.get("id"), item)
+    summary = issue_summary(issue)
+    summary.update({
+        "graph_theoretic_ready": True,
+        "ready_for_agent_label": ready_label in set(issue.get("labels") or []),
+        "semantic_readiness": "unverified",
+        "semantic_readiness_note": "Graph readiness is structural; dispatch still requires gate/semantic review.",
+    })
+    actionable_ready.append(summary)
+
+valid_ready_labels = [
+    issue_summary(issue)
+    for issue in ready_labeled
+    if issue.get("id") in ready_ids
+]
+
+stale_or_invalid = []
+for issue in ready_labeled:
+    issue_id = issue.get("id")
+    if issue_id not in ready_ids:
+        summary = issue_summary(issue)
+        summary["graph_theoretic_ready"] = False
+        summary["blocked_by"] = blocked_by.get(issue_id, [])
+        summary["reason"] = "Has ready-for-agent label but is not present in br ready --json."
+        stale_or_invalid.append(summary)
+
+unlabeled_ready = []
+for item in ready_items:
+    issue = issues_by_id.get(item.get("id"), item)
+    if ready_label not in set(issue.get("labels") or []):
+        summary = issue_summary(issue)
+        summary["graph_theoretic_ready"] = True
+        summary["semantic_readiness"] = "needs_review_before_label"
+        summary["recommended_action"] = "Run deterministic and semantic gates before adding ready-for-agent."
+        unlabeled_ready.append(summary)
+
+blocked_beads = []
+for item in blocked_items:
+    issue = issues_by_id.get(item.get("id"), item)
+    summary = issue_summary(issue)
+    summary["blocked_by"] = item.get("blocked_by") or []
+    summary["blocked_by_count"] = item.get("blocked_by_count", len(summary["blocked_by"]))
+    blocked_beads.append(summary)
+
+parent_blockers = []
+for issue in active_issues:
+    if not is_parent(issue):
+        continue
+    issue_id = issue.get("id")
+    dep_count = issue.get("dependency_count") or 0
+    blockers = blocked_by.get(issue_id, [])
+    if dep_count or blockers:
+        summary = issue_summary(issue)
+        summary["dependency_count"] = dep_count
+        summary["blocked_by"] = blockers
+        summary["reason"] = "Parent/closure issue still has unfinished dependency evidence."
+        parent_blockers.append(summary)
+
+single_owner_warnings = []
+for issue in active_issues:
+    notes = single_owner_notes(issue)
+    if notes:
+        summary = issue_summary(issue)
+        summary["warnings"] = notes
+        single_owner_warnings.append(summary)
+
+plan = plan_payload.get("plan", {}) if isinstance(plan_payload, dict) else {}
+tracks = plan.get("tracks", []) if isinstance(plan, dict) else []
+
+print(json.dumps({
+    "tool": "better-beads",
+    "schema": "better-beads-frontier-v1",
+    "contract_version": contract_version,
+    "repo": str(repo),
+    "graph_state": {
+        "has_beads_dir": True,
+        "issue_count": len(issues),
+        "active_count": len(active_issues),
+        "ready_count": len(actionable_ready),
+        "blocked_count": len(blocked_beads),
+        "ready_label_count": len(ready_labeled),
+    },
+    "readiness_model": {
+        "graph_theoretic_ready": "True only for beads returned by br ready --json.",
+        "semantic_readiness": "Always unverified here; this command does not run human/LLM semantic review.",
+        "label_truth": "`ready-for-agent` is audited, never mutated.",
+    },
+    "actionable_ready": actionable_ready,
+    "blocked_beads": blocked_beads,
+    "ready_label_audit": {
+        "valid_ready_labels": valid_ready_labels,
+        "stale_or_invalid_ready_labels": stale_or_invalid,
+        "unlabeled_ready_candidates": unlabeled_ready,
+    },
+    "deterministic_warnings": {
+        "parent_closure_blockers": parent_blockers,
+        "single_owner_surface_warnings": single_owner_warnings,
+    },
+    "bv_plan_summary": {
+        "track_count": len(tracks),
+        "total_actionable": plan.get("total_actionable") if isinstance(plan, dict) else None,
+        "total_blocked": plan.get("total_blocked") if isinstance(plan, dict) else None,
+        "highest_impact": (plan.get("summary") or {}).get("highest_impact") if isinstance(plan, dict) else None,
+    },
+    "inspections": {
+        "br_list": list_status,
+        "br_ready": ready_status,
+        "br_blocked": blocked_status,
+        "bv_robot_plan": plan_status,
+    },
+}, indent=2))
+PY
+}
+
+semantic_pack() {
+  python3 - "$CONTRACT_VERSION" "$SCRIPT_DIR" "$@" <<'PY'
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+contract_version = sys.argv[1]
+script_dir = Path(sys.argv[2])
+args = sys.argv[3:]
+repo = Path.cwd()
+mode: str | None = None
+
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == "--json":
+        mode = "json"
+        i += 1
+    elif arg == "--markdown":
+        mode = "markdown"
+        i += 1
+    elif arg == "--repo":
+        if i + 1 >= len(args):
+            print("--repo requires a path", file=sys.stderr)
+            sys.exit(2)
+        repo = Path(args[i + 1])
+        i += 2
+    else:
+        print(f"Unknown semantic-pack option: {arg}", file=sys.stderr)
+        print("Use: better-beads semantic-pack [--repo PATH] (--json | --markdown)", file=sys.stderr)
+        sys.exit(2)
+
+if mode is None:
+    print("Use: better-beads semantic-pack [--repo PATH] (--json | --markdown)", file=sys.stderr)
+    sys.exit(2)
+
+repo = repo.resolve()
+semantic_doc = script_dir.parent / "references" / "SEMANTIC-GATE.md"
+
+
+def stderr_snippet(text: str) -> str:
+    lines = [line for line in text.strip().splitlines() if line.strip()]
+    return "\n".join(lines[:20])
+
+
+def run_command(name: str, argv: list[str]) -> dict[str, Any]:
+    result = subprocess.run(
+        argv,
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    record: dict[str, Any] = {
+        "name": name,
+        "command": argv,
+        "returncode": result.returncode,
+        "stderr": stderr_snippet(result.stderr),
+        "stdout_bytes": len(result.stdout.encode()),
+        "parse_error": None,
+        "json": None,
+    }
+    if result.stdout.strip():
+        try:
+            record["json"] = json.loads(result.stdout)
+        except Exception as exc:
+            record["parse_error"] = str(exc)
+    return record
+
+
+def issue_list(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict) and isinstance(payload.get("issues"), list):
+        return [item for item in payload["issues"] if isinstance(item, dict)]
+    return []
+
+
+def extract_judge_prompt(text: str) -> str:
+    marker = "## Judge prompt"
+    start = text.find(marker)
+    if start == -1:
+        return ""
+    section = text[start + len(marker):]
+    next_heading = section.find("\n## ")
+    if next_heading != -1:
+        section = section[:next_heading]
+    return section.strip()
+
+
+commands = [
+    ("br_list", ["br", "list", "--json"]),
+    ("br_dep_cycles", ["br", "dep", "cycles", "--json"]),
+    ("bv_robot_plan", ["bv", "--robot-plan"]),
+    ("bv_robot_insights", ["bv", "--robot-insights"]),
+    ("route", ["bash", str(script_dir / "bead_route.sh"), "--repo", str(repo), "--json"]),
+    ("operator_gate", ["bash", str(script_dir / "bead_gate_loop.sh"), "--repo", str(repo), "--operator-dispatch", "--json"]),
+]
+
+records = {name: run_command(name, argv) for name, argv in commands}
+issues = issue_list(records["br_list"].get("json"))
+active = [item for item in issues if item.get("status") not in {"closed", "archived"}]
+active_ids = [item.get("id") for item in active if item.get("id")]
+route_json = records["route"].get("json") if isinstance(records["route"].get("json"), dict) else {}
+gate_json = records["operator_gate"].get("json") if isinstance(records["operator_gate"].get("json"), dict) else {}
+semantic_text = semantic_doc.read_text(encoding="utf-8") if semantic_doc.exists() else ""
+judge_prompt = extract_judge_prompt(semantic_text)
+
+command_statuses = {
+    name: {
+        "command": record["command"],
+        "returncode": record["returncode"],
+        "stderr": record["stderr"],
+        "parse_error": record["parse_error"],
+        "stdout_bytes": record["stdout_bytes"],
+    }
+    for name, record in records.items()
+}
+
+inspection_failures = [
+    name for name in ("br_list", "br_dep_cycles", "bv_robot_plan", "bv_robot_insights", "route")
+    if records[name]["returncode"] != 0 or records[name]["parse_error"]
+]
+gate_blocked = records["operator_gate"]["returncode"] != 0 or bool(gate_json.get("blocked_reasons"))
+
+pack = {
+    "tool": "better-beads",
+    "schema": "better-beads-semantic-pack-v1",
+    "contract_version": contract_version,
+    "repo": str(repo),
+    "selected_mode": route_json.get("recommended_mode"),
+    "active_bead_ids": active_ids,
+    "command_statuses": command_statuses,
+    "inspection_failures": inspection_failures,
+    "gate_blocked": gate_blocked,
+    "gate_blocked_reasons": gate_json.get("blocked_reasons", []),
+    "artifacts": {
+        "br_list": records["br_list"].get("json"),
+        "br_dep_cycles": records["br_dep_cycles"].get("json"),
+        "bv_robot_plan": records["bv_robot_plan"].get("json"),
+        "bv_robot_insights": records["bv_robot_insights"].get("json"),
+        "route": route_json,
+        "operator_gate": gate_json,
+    },
+    "semantic_review": {
+        "source": "references/SEMANTIC-GATE.md",
+        "advisory_only": True,
+        "network_called": False,
+        "judge_prompt": judge_prompt,
+    },
+    "notes": [
+        "This command packages artifacts only; it does not call a networked LLM.",
+        "Gate failures are included as review blockers instead of hidden.",
+        "Semantic review is explicit/advisory by default and not a normal pre-commit requirement.",
+    ],
+}
+
+if mode == "json":
+    print(json.dumps(pack, indent=2))
+else:
+    print("# Better Beads Semantic Pack")
+    print()
+    print(f"- Schema: `{pack['schema']}`")
+    print(f"- Selected mode: `{pack['selected_mode']}`")
+    print(f"- Active beads: {', '.join(active_ids) if active_ids else '(none)'}")
+    print(f"- Gate blocked: {str(gate_blocked).lower()}")
+    if pack["gate_blocked_reasons"]:
+        print("- Gate blocked reasons:")
+        for reason in pack["gate_blocked_reasons"]:
+            print(f"  - {reason}")
+    print()
+    print("## Command statuses")
+    for name, status in command_statuses.items():
+        print(f"- `{name}`: rc={status['returncode']}, parse_error={status['parse_error'] or 'none'}")
+        if status["stderr"]:
+            print(f"  - stderr: {status['stderr']}")
+    print()
+    print("## Artifact JSON")
+    print()
+    print("```json")
+    print(json.dumps(pack["artifacts"], indent=2))
+    print("```")
+    print()
+    print("## Judge prompt")
+    print()
+    print(judge_prompt or "(missing judge prompt)")
+
+if inspection_failures:
+    sys.exit(2)
+PY
 }
 
 robot_docs() {
@@ -115,7 +918,12 @@ Better Beads skill's local CLI helpers.
 
 ```bash
 scripts/better-beads capabilities --json
+scripts/better-beads authoring-triage --json
 scripts/better-beads route --json
+scripts/better-beads frontier --json
+scripts/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json
+scripts/better-beads semantic-pack --json
+scripts/better-beads semantic-pack --markdown
 scripts/better-beads triage --json
 scripts/better-beads quality-gate --repo . --report markdown --fail-on never
 scripts/better-beads gate-loop --repo . --operator-dispatch
@@ -125,6 +933,10 @@ scripts/better-beads closeout-guard --repo . --json
 ## Command map
 
 - `route` delegates to `bead_route.sh`.
+- `authoring-triage --json` returns the stable first packet for fresh agents: route recommendation, graph inspection summary, selected mode references, optional quickpack, mutation eligibility, required gates, and next commands.
+- `frontier --json` reports graph-ready beads, blocked beads, ready-label audit results, parent closure blockers, and single-owner surface warnings without mutating labels.
+- `create-graph --dry-run` previews a reviewed graph draft; `create-graph --apply` creates beads and dependencies through `br` after the same preflight.
+- `semantic-pack --json` and `semantic-pack --markdown` collect graph review artifacts and the semantic judge prompt without calling a networked LLM.
 - `quality-gate` delegates to `bead_quality_gate.py`.
 - `gate-loop` delegates to `bead_gate_loop.sh`.
 - `closeout-guard` delegates to `bead_closeout_guard.sh`.
@@ -133,7 +945,12 @@ scripts/better-beads closeout-guard --repo . --json
 ## Output contract
 
 - `capabilities --json` and `triage --json` emit JSON on stdout only.
+- `authoring-triage --json` emits `better-beads-authoring-triage-v1` and is read-only.
 - `route --json` emits routing recommendation as JSON on stdout only.
+- `frontier --json` distinguishes graph-theoretic readiness from semantic readiness; semantic readiness remains unverified until gates/review run.
+- `create-graph --dry-run` emits `better-beads-create-graph-preview-v1`; invalid references, cycles, duplicate titles, and blocked ready labels exit `2`.
+- `create-graph --apply` emits `better-beads-create-graph-apply-v1`; if a `br` mutation fails, the payload includes recovery evidence.
+- `semantic-pack --json` emits `better-beads-semantic-pack-v1`; gate failures are included as review blockers.
 - Usage errors go to stderr and exit `2`.
 - Delegated commands preserve the underlying command's exit code.
 EOF
@@ -214,6 +1031,22 @@ case "$cmd" in
   route)
     shift
     exec bash "$SCRIPT_DIR/bead_route.sh" "$@"
+    ;;
+  authoring-triage)
+    shift
+    authoring_triage_json "$@"
+    ;;
+  frontier)
+    shift
+    frontier_json "$@"
+    ;;
+  create-graph)
+    shift
+    exec python3 "$SCRIPT_DIR/bead_create_graph.py" "$@"
+    ;;
+  semantic-pack)
+    shift
+    semantic_pack "$@"
     ;;
   quality-gate)
     shift
