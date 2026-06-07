@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-route-v1.schema.json",
+  "title": "Better Beads route v1",
+  "description": "Current JSON output contract for bead_route.sh --json and delegated better-beads route --json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "schema",
+    "graph_state",
+    "plan_readiness",
+    "recommended_mode",
+    "reasoning",
+    "modes",
+    "next_steps"
+  ],
+  "properties": {
+    "tool": {
+      "const": "bead_route.sh"
+    },
+    "schema": {
+      "const": "better-beads-route-v1"
+    },
+    "graph_state": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "has_beads_dir",
+        "total_beads",
+        "by_status",
+        "has_cycles",
+        "cycle_count",
+        "cycle_inspection",
+        "inspection_warnings"
+      ],
+      "properties": {
+        "has_beads_dir": {
+          "type": "boolean"
+        },
+        "total_beads": {
+          "type": "integer"
+        },
+        "by_status": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "has_cycles": {
+          "type": "boolean"
+        },
+        "cycle_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cycle_inspection": {
+          "enum": [
+            "ok",
+            "failed"
+          ]
+        },
+        "inspection_warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "plan_readiness": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "check_required",
+        "gate_reference",
+        "required_gates",
+        "alternate_mode_if_weak",
+        "status",
+        "plan_path",
+        "missing_gates",
+        "check_kind",
+        "note"
+      ],
+      "properties": {
+        "check_required": {
+          "type": "boolean"
+        },
+        "gate_reference": {
+          "type": "string"
+        },
+        "required_gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "alternate_mode_if_weak": {
+          "const": "improve-plan-first"
+        },
+        "status": {
+          "enum": [
+            "not_checked",
+            "weak",
+            "structurally_ready"
+          ]
+        },
+        "plan_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "missing_gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "check_kind": {
+          "const": "shallow_term_presence"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "recommended_mode": {
+      "enum": [
+        "create-from-raw-plan",
+        "improve-plan-first",
+        "polish-existing-graph",
+        "closeout"
+      ]
+    },
+    "reasoning": {
+      "type": "string"
+    },
+    "modes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "mode",
+          "reference",
+          "recommended"
+        ],
+        "properties": {
+          "mode": {
+            "enum": [
+              "create-from-raw-plan",
+              "improve-plan-first",
+              "polish-existing-graph",
+              "closeout"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "recommended": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
+

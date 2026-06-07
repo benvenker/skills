@@ -5,5 +5,109 @@
   "abstract": "Better Beads is a Beads authoring and review skill for turning plans into behavioral execution contracts for fungible coding agents. Covers inspection-first routing, plan-readiness gates, route schema discovery, delegated helper identity, parent closure contracts, dependency graph hygiene, failure behavior, validation paths, BV readability, and reviewable PR-sized atomic slices without reducing test coverage.",
   "references": [
     "https://github.com/benvenker/skills"
+  ],
+  "required_tools": [
+    {
+      "name": "br",
+      "required_for": [
+        "graph inspection when .beads exists",
+        "bead status mutation",
+        "dependency and closure contract inspection"
+      ],
+      "version_command": "br --version",
+      "minimum_version": null,
+      "version_detection": "supported",
+      "failure_behavior": "fatal when inspecting or mutating a Beads task graph"
+    },
+    {
+      "name": "bv",
+      "required_for": [
+        "robot triage",
+        "robot plan and insights gates",
+        "graph-aware readiness review"
+      ],
+      "version_command": "bv --version",
+      "minimum_version": null,
+      "version_detection": "supported",
+      "failure_behavior": "fatal for robot graph triage and planning gates"
+    },
+    {
+      "name": "python3",
+      "required_for": [
+        "metadata and schema validation",
+        "JSON contract assertions",
+        "test harness execution"
+      ],
+      "version_command": "python3 --version",
+      "minimum_version": "3.10",
+      "version_detection": "supported",
+      "failure_behavior": "fatal for validation and schema contract checks"
+    },
+    {
+      "name": "bash",
+      "required_for": [
+        "shell-based workflow helpers",
+        "schema test harness execution",
+        "operator command snippets"
+      ],
+      "version_command": "bash --version",
+      "minimum_version": "4.0",
+      "version_detection": "supported",
+      "failure_behavior": "fatal for shell helper execution"
+    }
+  ],
+  "test_tools": {
+    "required": [
+      {
+        "name": "scripts/test_schemas.sh",
+        "required_for": [
+          "schema validation",
+          "contract validation"
+        ],
+        "version_command": null,
+        "minimum_version": null,
+        "version_detection": "not_supported",
+        "failure_behavior": "fatal for schema and contract validation"
+      }
+    ],
+    "optional": [
+      {
+        "name": "jsonschema",
+        "required_for": [
+          "third-party JSON Schema validation cross-checks"
+        ],
+        "version_command": "python3 -m jsonschema --version",
+        "minimum_version": null,
+        "version_detection": "supported",
+        "failure_behavior": "optional; skip the extra local cross-check when unavailable"
+      }
+    ]
+  },
+  "compatibility": {
+    "tested_with": {
+      "br": "0.2.15",
+      "bv": "0.16.4",
+      "python3": "3.12.3",
+      "bash": "5.2.21",
+      "jsonschema": "4.10.3",
+      "scripts/test_schemas.sh": "unknown"
+    }
+  },
+  "triggers": [
+    "converting plans or PRDs into beads",
+    "reviewing bead quality",
+    "fixing bad bead graphs",
+    "preparing beads for multi-agent implementation"
+  ],
+  "exclusions": [
+    "general-purpose issue tracking outside Beads",
+    "feature implementation for beads produced by the skill",
+    "broad code rewrites unrelated to Beads authoring or graph quality",
+    "interactive TUI operation when robot-mode surfaces are available"
+  ],
+  "required_capabilities": [
+    "filesystem_read",
+    "filesystem_write",
+    "bash_execute"
   ]
 }
