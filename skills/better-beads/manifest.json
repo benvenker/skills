@@ -1,0 +1,392 @@
+{
+  "name": "better-beads",
+  "version": "1.0.0",
+  "description": "Beads authoring, review, routing, quality-gate, dispatch, and closeout helper skill for creating behavior-first execution contracts.",
+  "author": "Ben Venker",
+  "triggers": [
+    "converting plans or PRDs into beads",
+    "reviewing bead quality",
+    "fixing bad bead graphs",
+    "preparing beads for multi-agent implementation"
+  ],
+  "exclusions": [
+    "general-purpose issue tracking outside Beads",
+    "feature implementation for beads produced by the skill",
+    "broad code rewrites unrelated to Beads authoring or graph quality",
+    "interactive TUI operation when robot-mode surfaces are available"
+  ],
+  "required_tools": [
+    "br",
+    "bv",
+    "python3",
+    "bash"
+  ],
+  "risk_level": "medium",
+  "resources": [
+    {
+      "path": "SKILL.md",
+      "description": "Primary skill entrypoint and workflow rules."
+    },
+    {
+      "path": "metadata.json",
+      "description": "Canonical dependency, compatibility, trigger, and exclusion metadata."
+    },
+    {
+      "path": "PORTABILITY.md",
+      "description": "Portability boundary for docs, examples, scripts, schemas, and Beads-specific gates."
+    },
+    {
+      "path": "schemas/README.md",
+      "description": "Inventory of covered and deferred robot output schemas."
+    },
+    {
+      "path": "references/README.md",
+      "description": "Reference reading order for authoring, routing, quality, graph construction, and semantic review."
+    }
+  ],
+  "scripts": [
+    {
+      "path": "scripts/better-beads",
+      "description": "Unified dispatcher for Better Beads robot surfaces and delegated commands."
+    },
+    {
+      "path": "scripts/bead_route.sh",
+      "description": "Inspection-first route helper for graph state and plan-readiness recommendations."
+    },
+    {
+      "path": "scripts/bead_gate_loop.sh",
+      "description": "Operator gate runner and dispatch-verdict producer."
+    },
+    {
+      "path": "scripts/bead_quality_gate.py",
+      "description": "Deterministic Beads execution-contract quality gate."
+    },
+    {
+      "path": "scripts/bead_closeout_guard.sh",
+      "description": "Closeout guard for unexpected in-progress beads."
+    },
+    {
+      "path": "scripts/bead_create_graph.py",
+      "description": "Graph draft dry-run and apply helper."
+    },
+    {
+      "path": "scripts/test_schemas.sh",
+      "description": "Offline schema and producer contract validation harness."
+    }
+  ],
+  "surfaces": [
+    {
+      "command": "scripts/better-beads capabilities --json",
+      "description": "Dispatcher capability inventory.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "capabilities-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/better-beads robot-docs guide",
+      "description": "Dispatcher robot usage guide.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "scripts/better-beads triage --json",
+      "description": "Dispatcher triage summary.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-triage-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/better-beads authoring-triage --json",
+      "description": "Stable first agent-readable packet for route, graph inspection, mutation eligibility, and next commands.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-authoring-triage-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-authoring-triage-v1.schema.json"
+    },
+    {
+      "command": "scripts/better-beads route --json",
+      "description": "Dispatcher route recommendation delegated to bead_route.sh.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-route-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-route-v1.schema.json"
+    },
+    {
+      "command": "scripts/better-beads route --plan PATH --json",
+      "description": "Dispatcher route recommendation with raw plan readiness inspection.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-route-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-route-v1.schema.json"
+    },
+    {
+      "command": "scripts/better-beads frontier --json",
+      "description": "Dispatcher frontier summary.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-frontier-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/better-beads create-graph --dry-run PATH",
+      "description": "Preview graph mutations from a graph draft file.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-create-graph-preview-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/better-beads create-graph --apply PATH",
+      "description": "Apply graph mutations from a graph draft file.",
+      "mutates_repo": true,
+      "requires_tools": [
+        "br",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-create-graph-apply-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/better-beads semantic-pack --json",
+      "description": "Collect semantic-review context as JSON.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-semantic-pack-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/better-beads semantic-pack --markdown",
+      "description": "Collect semantic-review context as Markdown.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "markdown",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "scripts/better-beads quality-gate --repo REPO --json",
+      "description": "Dispatcher quality-gate JSON delegated to bead_quality_gate.py.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-quality-gate-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-quality-gate-v1.schema.json"
+    },
+    {
+      "command": "scripts/better-beads gate-loop --repo REPO --operator-dispatch --json",
+      "description": "Dispatcher operator dispatch verdict delegated to bead_gate_loop.sh.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-dispatch-verdict-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-dispatch-verdict-v1.schema.json"
+    },
+    {
+      "command": "scripts/better-beads closeout-guard --repo REPO --json",
+      "description": "Dispatcher closeout guard JSON delegated to bead_closeout_guard.sh.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-closeout-guard-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/bead_route.sh capabilities --json",
+      "description": "Route helper capability inventory.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "capabilities-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/bead_route.sh robot-docs guide",
+      "description": "Route helper robot usage guide.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "scripts/bead_route.sh --robot-help",
+      "description": "Route helper robot usage guide alias.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "scripts/bead_route.sh --json",
+      "description": "Route helper graph-state recommendation.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-route-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-route-v1.schema.json"
+    },
+    {
+      "command": "scripts/bead_route.sh --plan PATH --json",
+      "description": "Route helper graph-state and plan-readiness recommendation.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-route-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-route-v1.schema.json"
+    },
+    {
+      "command": "scripts/bead_gate_loop.sh capabilities --json",
+      "description": "Gate-loop capability inventory.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "capabilities-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "scripts/bead_gate_loop.sh robot-docs guide",
+      "description": "Gate-loop robot usage guide.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "scripts/bead_gate_loop.sh --robot-help",
+      "description": "Gate-loop robot usage guide alias.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "bash"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "scripts/bead_gate_loop.sh --operator-dispatch --json",
+      "description": "Gate-loop machine-readable dispatch verdict.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "bv",
+        "python3",
+        "bash"
+      ],
+      "stdout_schema": "better-beads-dispatch-verdict-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-dispatch-verdict-v1.schema.json"
+    },
+    {
+      "command": "python3 scripts/bead_quality_gate.py capabilities --json",
+      "description": "Quality-gate capability inventory.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "python3"
+      ],
+      "stdout_schema": "capabilities-v1",
+      "stdout_schema_status": "deferred"
+    },
+    {
+      "command": "python3 scripts/bead_quality_gate.py robot-docs guide",
+      "description": "Quality-gate robot usage guide.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "python3"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "python3 scripts/bead_quality_gate.py --robot-help",
+      "description": "Quality-gate robot usage guide alias.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "python3"
+      ],
+      "stdout_schema": "markdown-guide-v1",
+      "stdout_schema_status": "markdown"
+    },
+    {
+      "command": "python3 scripts/bead_quality_gate.py --repo REPO --json",
+      "description": "Quality-gate machine-readable finding summary.",
+      "mutates_repo": false,
+      "requires_tools": [
+        "br",
+        "python3"
+      ],
+      "stdout_schema": "better-beads-quality-gate-v1",
+      "stdout_schema_status": "covered",
+      "stdout_schema_path": "schemas/better-beads-quality-gate-v1.schema.json"
+    }
+  ]
+}
