@@ -3,11 +3,12 @@ set -euo pipefail
 
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-06"
-KNOWN_FLAGS=(--repo --plan --json --version --robot-help -h --help)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KNOWN_FLAGS=(--repo --plan --json --telemetry --version --robot-help -h --help)
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bead_route.sh [--repo PATH] [--plan PATH] [--json]
+Usage: bead_route.sh [--repo PATH] [--plan PATH] [--json] [--telemetry PATH]
        bead_route.sh capabilities --json
        bead_route.sh robot-docs guide
 
@@ -23,6 +24,7 @@ Options:
   --repo PATH       Repository containing .beads (default: current directory)
   --plan PATH       Plan/PRD file to shallow-check against create-mode readiness gates
   --json            Emit JSON instead of human-readable output
+  --telemetry PATH   Append one Better Beads telemetry JSONL event
   --version         Print version and exit
   --robot-help      Print an agent-oriented guide and exit
 
@@ -35,6 +37,38 @@ Exit codes:
   0  routing recommendation produced
   2  usage error or missing tooling
 EOF
+}
+
+elapsed_ms() {
+  python3 - "$RUN_STARTED_MS" <<'PY'
+import sys
+import time
+
+started = int(sys.argv[1])
+print(max(0, int(time.time() * 1000) - started))
+PY
+}
+
+emit_route_telemetry() {
+  local exit_code="$1"
+  local verdict="$2"
+  [[ -n "$TELEMETRY" ]] || return 0
+  local helper="$SCRIPT_DIR/better_beads_telemetry.py"
+  if [[ ! -r "$helper" ]]; then
+    echo "better-beads telemetry warning: helper missing or unreadable: $helper" >&2
+    return 0
+  fi
+  python3 "$helper" \
+    --emit "$TELEMETRY" \
+    --tool bead_route.sh \
+    --tool-version "$VERSION" \
+    --contract-version "$CONTRACT_VERSION" \
+    --mode route \
+    --repo "$REPO" \
+    --duration-ms "$(elapsed_ms)" \
+    --exit-code "$exit_code" \
+    --verdict "$verdict" \
+    --finding-counts '{}' || true
 }
 
 capabilities_json() {
@@ -217,10 +251,16 @@ case "${1:-}" in
     ;;
 esac
 
+RUN_STARTED_MS="$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)"
 START_CWD="$(pwd)"
 REPO="$START_CWD"
 PLAN=""
 JSON=0
+TELEMETRY=""
 
 while (($#)); do
   case "$1" in
@@ -238,6 +278,11 @@ while (($#)); do
       JSON=1
       shift
       ;;
+    --telemetry)
+      [[ -n "${2:-}" ]] || { echo "--telemetry requires a path" >&2; exit 2; }
+      TELEMETRY="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -251,6 +296,9 @@ done
 REPO="$(cd "$REPO" && pwd)"
 if [[ -n "$PLAN" && "$PLAN" != /* ]]; then
   PLAN="$START_CWD/$PLAN"
+fi
+if [[ -n "$TELEMETRY" && "$TELEMETRY" != /* ]]; then
+  TELEMETRY="$START_CWD/$TELEMETRY"
 fi
 if [[ -n "$PLAN" && ! -r "$PLAN" ]]; then
   echo "--plan path is missing or unreadable: $PLAN" >&2
@@ -374,6 +422,7 @@ else:
     for i, step in enumerate(next_steps, 1):
         print(f"  {i}. {step}")
 PY
+  emit_route_telemetry 0 pass
   exit 0
 fi
 
@@ -599,3 +648,4 @@ else:
     for i, step in enumerate(next_steps, 1):
         print(f"  {i}. {step}")
 PY
+emit_route_telemetry 0 pass
