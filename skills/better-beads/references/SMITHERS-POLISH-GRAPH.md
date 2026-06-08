@@ -105,6 +105,12 @@ implementing Beads. Future applying polish should use a typed Beads mutation tas
 or custom tool that allows only reviewed `br update`, dependency, and label
 mutations.
 
+The wrapper also passes `localInspection.context_pack` into Smithers. That pack
+contains full Bead IDs, titles, statuses, labels, dependency relationships, and
+descriptions for the current open graph, plus parsed gate-loop artifact paths and
+finding counts. Reviewer prompts treat this context pack as authoritative when
+present and require full Bead IDs in recommendations.
+
 ## Scores
 
 This installed Smithers CLI version does not expose a top-level `verify`
@@ -114,8 +120,10 @@ command. Use the following verification surfaces instead:
 bunx smithers-orchestrator workflow doctor --format json
 bunx smithers-orchestrator graph .smithers/workflows/better-beads-polish-graph.tsx --format json
 bunx smithers-orchestrator inspect <run-id> --format json
+bunx smithers-orchestrator output <run-id> synthesize-polish-plan --json
 bunx smithers-orchestrator node synthesize-polish-plan --run-id <run-id> --format json --filter-output output
 bunx smithers-orchestrator events <run-id> --node synthesize-polish-plan --type output --json --limit 100000
+bunx smithers-orchestrator scores <run-id> --node synthesize-polish-plan
 ```
 
 For a completed polish run, inspect Smithers scores directly:
