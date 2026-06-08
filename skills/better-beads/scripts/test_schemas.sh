@@ -175,7 +175,7 @@ issue = {
 }
 
 issues_path.write_text(json.dumps(issue) + "\n", encoding="utf-8")
-list_path.write_text(json.dumps([issue]) + "\n", encoding="utf-8")
+list_path.write_text(json.dumps({"issues": [issue]}) + "\n", encoding="utf-8")
 ready_path.write_text(json.dumps([issue]) + "\n", encoding="utf-8")
 blocked_path.write_text("[]\n", encoding="utf-8")
 PY

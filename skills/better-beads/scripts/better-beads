@@ -1325,6 +1325,14 @@ def compact_issue(issue: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def issue_records(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [issue for issue in value if isinstance(issue, dict)]
+    if isinstance(value, dict) and isinstance(value.get("issues"), list):
+        return [issue for issue in value["issues"] if isinstance(issue, dict)]
+    return []
+
+
 def build_context_pack(authoring_record: dict[str, Any], gate_record: dict[str, Any]) -> dict[str, Any]:
     authoring_json = authoring_record.get("stdout_json")
     command_statuses = authoring_json.get("command_statuses") if isinstance(authoring_json, dict) else None
@@ -1332,16 +1340,14 @@ def build_context_pack(authoring_record: dict[str, Any], gate_record: dict[str, 
     for command_name in ("br_list", "br_ready", "br_blocked"):
         status = command_statuses.get(command_name) if isinstance(command_statuses, dict) else None
         stdout_json = status.get("stdout_json") if isinstance(status, dict) else None
-        if isinstance(stdout_json, list):
-            for issue in stdout_json:
-                if isinstance(issue, dict) and isinstance(issue.get("id"), str):
-                    issues_by_id[issue["id"]] = compact_issue(issue)
+        for issue in issue_records(stdout_json):
+            if isinstance(issue.get("id"), str):
+                issues_by_id[issue["id"]] = compact_issue(issue)
     if not issues_by_id:
         list_record = command_record(["br", "list", "--json"], parse_stdout=True)
-        if isinstance(list_record.get("stdout_json"), list):
-            for issue in list_record["stdout_json"]:
-                if isinstance(issue, dict) and isinstance(issue.get("id"), str):
-                    issues_by_id[issue["id"]] = compact_issue(issue)
+        for issue in issue_records(list_record.get("stdout_json")):
+            if isinstance(issue.get("id"), str):
+                issues_by_id[issue["id"]] = compact_issue(issue)
     gate_json = gate_record.get("stdout_json")
     context_pack = {
         "source": "better-beads smithers polish-graph local inspection",
