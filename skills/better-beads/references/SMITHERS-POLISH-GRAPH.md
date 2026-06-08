@@ -24,9 +24,12 @@ These commands are optional. Normal Better Beads authoring, routing, quality, an
 ```bash
 scripts/better-beads smithers check --json
 scripts/better-beads smithers polish-graph --json
+scripts/better-beads smithers review-export --run-id <run-id> --json
 ```
 
 `smithers check --json` reports local prerequisites without invoking `bunx` or Smithers. `smithers polish-graph --json` is recommendation-only: it rejects `--apply`, collects local read-only inspection, runs Smithers only when prerequisites are available, and returns a structured Better Beads envelope.
+
+`smithers review-export --json` is post-hoc: it reads completed Smithers polish runs and projects them into review/eval items. It gathers final output, Smithers `scores`, the advisory judge verdict, the current Beads snapshot, and exact inspection commands. It does not mutate Beads or write eval files.
 
 ## Setup
 
@@ -111,6 +114,18 @@ descriptions for the current open graph, plus parsed gate-loop artifact paths an
 finding counts. Reviewer prompts treat this context pack as authoritative when
 present and require full Bead IDs in recommendations.
 
+The synthesized polish result includes an advisory `judge_verdict`:
+
+```json
+{
+  "result": "Pass",
+  "critique": "The recommendations are precise and use full Bead IDs.",
+  "confidence": 0.82
+}
+```
+
+Treat this as a production signal to calibrate, not as ground truth.
+
 ## Scores
 
 This installed Smithers CLI version does not expose a top-level `verify`
@@ -133,6 +148,35 @@ bunx smithers-orchestrator scores <run-id> --node synthesize-polish-plan
 ```
 
 Smithers judge scores are normalized from `0` to `1`. They are separate from the manual Better Beads rubric, which uses 0-3 scoring per dimension. Treat Smithers scores as advisory evidence alongside route, quality-gate, BV, and human review.
+
+## Post-Hoc Review
+
+Export completed run projections:
+
+```bash
+scripts/better-beads smithers review-export --run-id <run-id> --json \
+  > .smithers/evals/review-export.json
+```
+
+Open the local review surface:
+
+```text
+skills/better-beads/review-ui/posthoc-smithers-review.html
+```
+
+The UI loads `review-export.json`, shows one completed run at a time, and lets the reviewer mark `Pass`, `Fail`, or `Defer` with free-text feedback. The review timestamp is automatic. Failure categories are intentionally deferred for v1.
+
+Human labels are authoritative. The exported eval JSONL stores simple scalar fields in `annotations`:
+
+```json
+{
+  "human_label": "Fail",
+  "judge_result": "Pass",
+  "judge_disagreement": true
+}
+```
+
+Richer review data lives under `metadata.human_review`, including feedback text, source run, target node, Bead IDs, and the original judge verdict. These disagreement cases are the calibration set for future judge tuning.
 
 ## Evals, Optional
 
@@ -173,6 +217,8 @@ bunx smithers-orchestrator eval .smithers/workflows/better-beads-polish-graph.ts
 
 Evals are advisory and opt-in. They are not part of the default Better Beads dispatcher path, and Better Beads does not expose a `smithers eval-polish` command in v1.
 
+Post-hoc human review is also opt-in. It runs after Smithers completes; it does not use mid-workflow `HumanTask` or `Approval` in v1.
+
 ## Authoring Triage Hint
 
 `authoring-triage --json` recommends this lane only under:
@@ -198,5 +244,6 @@ Other modes omit `smithers_recommendation`. Authoring triage does not check Smit
 - Better Beads Smithers commands are read-only from the repo and Beads perspective.
 - The Smithers workflow returns recommendations only.
 - Evals are advisory and opt-in.
+- Post-hoc human labels are authoritative eval labels.
 - Apply any accepted graph change manually through reviewed `br` commands.
 - Do not use this lane to create implementation code, mutate Beads, initialize Smithers, install dependencies, or replace the normal route, quality-gate, and dispatch gates.

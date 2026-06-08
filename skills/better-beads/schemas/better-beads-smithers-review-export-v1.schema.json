@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-smithers-review-export-v1.schema.json",
+  "title": "Better Beads Smithers review export v1",
+  "description": "Current JSON output contract for better-beads smithers review-export --json. This projects completed Smithers polish runs into post-hoc human review and eval-compatible cases.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "schema",
+    "contract_version",
+    "available",
+    "repo",
+    "workflow_path",
+    "run_ids",
+    "checks",
+    "missing",
+    "items",
+    "ps",
+    "error"
+  ],
+  "properties": {
+    "tool": {
+      "const": "better-beads"
+    },
+    "schema": {
+      "const": "better-beads-smithers-review-export-v1"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "available": {
+      "type": "boolean"
+    },
+    "repo": {
+      "type": "string"
+    },
+    "workflow_path": {
+      "const": ".smithers/workflows/better-beads-polish-graph.tsx"
+    },
+    "run_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "bunx",
+          "smithers_dir",
+          "workflow"
+        ]
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "item_id",
+          "source",
+          "run_id",
+          "workflow_path",
+          "target_node",
+          "result",
+          "result_source",
+          "result_error",
+          "judge_verdict",
+          "judge_scores",
+          "smithers_scores",
+          "beads",
+          "commands",
+          "smithers",
+          "human_review",
+          "eval_case"
+        ]
+      }
+    },
+    "ps": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Better Beads Smithers Review</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #18212f;
+      --muted: #657184;
+      --line: #d8dde6;
+      --pass: #12805c;
+      --fail: #c0342b;
+      --defer: #7a5b00;
+      --accent: #2251b5;
+      --soft: #eef2f8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      min-height: 34px;
+      padding: 0 12px;
+      cursor: pointer;
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .rail {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 100vh;
+    }
+
+    .toolbar,
+    .review-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      flex-wrap: wrap;
+    }
+
+    .toolbar input[type="file"] {
+      max-width: 100%;
+      color: var(--muted);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      border-bottom: 1px solid var(--line);
+      background: var(--line);
+    }
+
+    .stat {
+      background: var(--panel);
+      padding: 10px 12px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.1;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .list {
+      overflow: auto;
+    }
+
+    .row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      padding: 12px;
+      min-height: 72px;
+      background: var(--panel);
+    }
+
+    .row.active {
+      background: var(--soft);
+      border-left: 4px solid var(--accent);
+      padding-left: 8px;
+    }
+
+    .row-title {
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .row-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    .badge {
+      align-self: start;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      background: var(--panel);
+      white-space: nowrap;
+    }
+
+    .badge.pass {
+      color: var(--pass);
+      border-color: #a7d8c7;
+    }
+
+    .badge.fail {
+      color: var(--fail);
+      border-color: #e2aaa6;
+    }
+
+    .badge.defer {
+      color: var(--defer);
+      border-color: #dccb8d;
+    }
+
+    main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    .review-bar {
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .actions button[data-label="Pass"].selected {
+      background: var(--pass);
+      color: #fff;
+      border-color: var(--pass);
+    }
+
+    .actions button[data-label="Fail"].selected {
+      background: var(--fail);
+      color: #fff;
+      border-color: var(--fail);
+    }
+
+    .actions button[data-label="Defer"].selected {
+      background: var(--defer);
+      color: #fff;
+      border-color: var(--defer);
+    }
+
+    .content {
+      overflow: auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .section h2,
+    .section h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .section h3 {
+      font-size: 14px;
+    }
+
+    .summary {
+      font-size: 18px;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .scores {
+      display: grid;
+      gap: 8px;
+    }
+
+    .score {
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) minmax(120px, 180px) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 24px;
+    }
+
+    .meter {
+      height: 8px;
+      background: #e8ebf1;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .meter span {
+      display: block;
+      height: 100%;
+      background: var(--accent);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .bead {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .bead:first-child {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+
+    .bead-title {
+      font-weight: 650;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      color: var(--ink);
+      background: var(--panel);
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 32px;
+      text-align: center;
+    }
+
+    @media (max-width: 860px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        min-height: auto;
+        max-height: 42vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .score {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <div class="toolbar">
+        <input id="file" type="file" accept="application/json,.json">
+        <button id="export">Export JSONL</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="list" id="list"></div>
+    </aside>
+    <main>
+      <div class="review-bar">
+        <div>
+          <strong id="title">Better Beads Smithers Review</strong>
+          <div class="row-meta" id="subtitle"></div>
+        </div>
+        <div class="actions">
+          <button data-label="Pass">Pass</button>
+          <button data-label="Fail">Fail</button>
+          <button data-label="Defer">Defer</button>
+          <button id="prev" title="Previous">Prev</button>
+          <button id="next" title="Next">Next</button>
+        </div>
+      </div>
+      <div class="content" id="detail">
+        <div class="empty">Load a review-export JSON file.</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      payload: null,
+      items: [],
+      index: 0,
+      reviews: JSON.parse(localStorage.getItem("betterBeadsSmithersReviews") || "{}"),
+    };
+
+    const els = {
+      file: document.getElementById("file"),
+      export: document.getElementById("export"),
+      list: document.getElementById("list"),
+      detail: document.getElementById("detail"),
+      stats: document.getElementById("stats"),
+      title: document.getElementById("title"),
+      subtitle: document.getElementById("subtitle"),
+      prev: document.getElementById("prev"),
+      next: document.getElementById("next"),
+      actions: Array.from(document.querySelectorAll("[data-label]")),
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#039;",
+      }[char]));
+    }
+
+    function markdownLite(value) {
+      return escapeHtml(value)
+        .replace(/^### (.*)$/gm, "<h3>$1</h3>")
+        .replace(/^## (.*)$/gm, "<h3>$1</h3>")
+        .replace(/^- (.*)$/gm, "<div>• $1</div>")
+        .replace(/\n/g, "<br>");
+    }
+
+    function reviewFor(item) {
+      return state.reviews[item.item_id] || {
+        label: item.human_review?.label || null,
+        feedback: item.human_review?.feedback || "",
+        reviewed_at: item.human_review?.reviewed_at || null,
+      };
+    }
+
+    function saveReviews() {
+      localStorage.setItem("betterBeadsSmithersReviews", JSON.stringify(state.reviews));
+    }
+
+    function setReview(label) {
+      const item = state.items[state.index];
+      if (!item) return;
+      const current = reviewFor(item);
+      state.reviews[item.item_id] = {
+        ...current,
+        label,
+        reviewed_at: new Date().toISOString(),
+      };
+      saveReviews();
+      render();
+    }
+
+    function setFeedback(value) {
+      const item = state.items[state.index];
+      if (!item) return;
+      const current = reviewFor(item);
+      state.reviews[item.item_id] = {
+        ...current,
+        feedback: value,
+        reviewed_at: current.reviewed_at || new Date().toISOString(),
+      };
+      saveReviews();
+      renderList();
+      renderStats();
+    }
+
+    function badge(label) {
+      if (!label) return "<span class=\"badge\">Unreviewed</span>";
+      return `<span class="badge ${label.toLowerCase()}">${escapeHtml(label)}</span>`;
+    }
+
+    function renderStats() {
+      const counts = { total: state.items.length, Pass: 0, Fail: 0, Defer: 0 };
+      state.items.forEach((item) => {
+        const label = reviewFor(item).label;
+        if (label && counts[label] !== undefined) counts[label] += 1;
+      });
+      els.stats.innerHTML = [
+        ["Total", counts.total],
+        ["Pass", counts.Pass],
+        ["Fail", counts.Fail],
+        ["Defer", counts.Defer],
+      ].map(([name, value]) => `<div class="stat"><strong>${value}</strong><span>${name}</span></div>`).join("");
+    }
+
+    function renderList() {
+      if (!state.items.length) {
+        els.list.innerHTML = "<div class=\"empty\">No review items.</div>";
+        return;
+      }
+      els.list.innerHTML = state.items.map((item, index) => {
+        const review = reviewFor(item);
+        const verdict = item.result?.verdict || item.result_source || "unknown";
+        return `
+          <button class="row ${index === state.index ? "active" : ""}" data-index="${index}">
+            <span>
+              <span class="row-title">${escapeHtml(item.run_id)}</span>
+              <span class="row-meta">${escapeHtml(verdict)} · ${escapeHtml(item.result_source)}</span>
+            </span>
+            ${badge(review.label)}
+          </button>
+        `;
+      }).join("");
+      els.list.querySelectorAll("[data-index]").forEach((row) => {
+        row.addEventListener("click", () => {
+          state.index = Number(row.dataset.index);
+          render();
+        });
+      });
+    }
+
+    function renderScores(scores) {
+      const entries = Object.entries(scores || {});
+      if (!entries.length) return "<div class=\"row-meta\">No score data.</div>";
+      return `<div class="scores">${entries.map(([name, value]) => {
+        const numeric = Number(value);
+        const width = Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric * 100)) : 0;
+        return `
+          <div class="score">
+            <span>${escapeHtml(name)}</span>
+            <span class="meter"><span style="width: ${width}%"></span></span>
+            <span class="mono">${escapeHtml(value)}</span>
+          </div>
+        `;
+      }).join("")}</div>`;
+    }
+
+    function renderSmithersScores(scores) {
+      if (!Array.isArray(scores) || !scores.length) return "<div class=\"row-meta\">No Smithers scores.</div>";
+      return scores.map((score) => `
+        <div class="bead">
+          <div class="bead-title">${escapeHtml(score.scorer || score.node || "score")} · ${escapeHtml(score.score)}</div>
+          <div>${escapeHtml(score.reason || "")}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderBeads(beads) {
+      if (!Array.isArray(beads) || !beads.length) return "<div class=\"row-meta\">No Bead snapshot.</div>";
+      return beads.map((bead) => `
+        <div class="bead">
+          <div class="bead-title">${escapeHtml(bead.id)} · ${escapeHtml(bead.title)}</div>
+          <div class="row-meta">${escapeHtml(bead.status)} · P${escapeHtml(bead.priority)} · deps: ${escapeHtml((bead.dependencies || []).join(", ") || "none")}</div>
+          <div>${markdownLite(bead.description || "")}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderCommands(commands) {
+      return Object.entries(commands || {}).map(([name, command]) => `
+        <details>
+          <summary>${escapeHtml(name)}</summary>
+          <pre class="mono">${escapeHtml(command)}</pre>
+        </details>
+      `).join("");
+    }
+
+    function renderDetail() {
+      const item = state.items[state.index];
+      if (!item) {
+        els.title.textContent = "Better Beads Smithers Review";
+        els.subtitle.textContent = "";
+        els.detail.innerHTML = "<div class=\"empty\">Load a review-export JSON file.</div>";
+        return;
+      }
+      const review = reviewFor(item);
+      const judge = item.judge_verdict || {};
+      els.title.textContent = item.run_id;
+      els.subtitle.textContent = `${item.workflow_path} · ${item.target_node}`;
+      els.actions.forEach((button) => {
+        button.classList.toggle("selected", button.dataset.label === review.label);
+      });
+      els.detail.innerHTML = `
+        <section class="section">
+          <h2>Polish Result</h2>
+          <p class="summary">${escapeHtml(item.result?.summary || item.result_error || "No result extracted.")}</p>
+          <div class="row-meta">${escapeHtml(item.result?.verdict || "unknown")} · ${escapeHtml(item.result_source)}</div>
+        </section>
+        <section class="grid">
+          <div class="section">
+            <h2>Judge Verdict</h2>
+            <div>${badge(judge.result || "Advisory")}</div>
+            <p>${escapeHtml(judge.critique || "No judge critique captured.")}</p>
+            <div class="row-meta">confidence: ${escapeHtml(judge.confidence ?? "n/a")}</div>
+          </div>
+          <div class="section">
+            <h2>Workflow Scores</h2>
+            ${renderScores(item.judge_scores)}
+          </div>
+        </section>
+        <section class="section">
+          <h2>Smithers Scores</h2>
+          ${renderSmithersScores(item.smithers_scores)}
+        </section>
+        <section class="section">
+          <h2>Human Feedback</h2>
+          <textarea id="feedback">${escapeHtml(review.feedback || "")}</textarea>
+          <div class="row-meta">reviewed_at: ${escapeHtml(review.reviewed_at || "not reviewed")}</div>
+        </section>
+        <section class="section">
+          <h2>Beads</h2>
+          ${renderBeads(item.beads)}
+        </section>
+        <section class="section">
+          <h2>Inspect Commands</h2>
+          ${renderCommands(item.commands)}
+        </section>
+      `;
+      document.getElementById("feedback").addEventListener("input", (event) => setFeedback(event.target.value));
+    }
+
+    function render() {
+      renderStats();
+      renderList();
+      renderDetail();
+    }
+
+    function caseForItem(item) {
+      const review = reviewFor(item);
+      if (!review.label) return null;
+      const judgeResult = item.judge_verdict?.result || "";
+      const disagreement = Boolean(judgeResult && judgeResult !== review.label);
+      return {
+        id: `human-review-${item.item_id.replace(/[^A-Za-z0-9_-]+/g, "-").slice(0, 80)}`,
+        input: {
+          request: "Post-hoc human review of Better Beads Smithers polish output.",
+          repo: state.payload?.repo || "",
+          apply: false,
+          strict: true,
+          localInspection: {
+            reviewed_run_id: item.run_id,
+            reviewed_bead_ids: (item.beads || []).map((bead) => bead.id).filter(Boolean),
+          },
+        },
+        expected: {
+          outputContains: {
+            polishPlan: {
+              judge_verdict: {
+                result: review.label,
+              },
+            },
+          },
+        },
+        annotations: {
+          suite: "better-beads-polish-human-review",
+          human_label: review.label,
+          reviewer: "ben",
+          reviewed_at: review.reviewed_at || new Date().toISOString(),
+          judge_result: judgeResult,
+          judge_disagreement: disagreement,
+        },
+        metadata: {
+          human_review: {
+            label: review.label,
+            feedback: review.feedback || "",
+            reviewed_at: review.reviewed_at || new Date().toISOString(),
+            reviewer: "ben",
+            source: {
+              run_id: item.run_id,
+              workflow_path: item.workflow_path,
+              target_node: item.target_node,
+              bead_ids: (item.beads || []).map((bead) => bead.id).filter(Boolean),
+            },
+            judge: item.judge_verdict || null,
+            judge_disagreement: disagreement,
+          },
+        },
+      };
+    }
+
+    function exportJsonl() {
+      const cases = state.items.map(caseForItem).filter(Boolean);
+      const blob = new Blob([cases.map((item) => JSON.stringify(item)).join("\n") + "\n"], { type: "application/jsonl" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "better-beads-smithers-human-review.eval.jsonl";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    els.file.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      state.payload = JSON.parse(await file.text());
+      state.items = Array.isArray(state.payload.items) ? state.payload.items : [];
+      state.index = 0;
+      render();
+    });
+
+    els.export.addEventListener("click", exportJsonl);
+    els.actions.forEach((button) => {
+      button.addEventListener("click", () => setReview(button.dataset.label));
+    });
+    els.prev.addEventListener("click", () => {
+      state.index = Math.max(0, state.index - 1);
+      render();
+    });
+    els.next.addEventListener("click", () => {
+      state.index = Math.min(state.items.length - 1, state.index + 1);
+      render();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.target.tagName === "TEXTAREA") return;
+      if (event.key === "ArrowLeft") els.prev.click();
+      if (event.key === "ArrowRight") els.next.click();
+      if (event.key === "1") setReview("Pass");
+      if (event.key === "2") setReview("Fail");
+      if (event.key.toLowerCase() === "d") setReview("Defer");
+    });
+
+    render();
+  </script>
+</body>
+</html>

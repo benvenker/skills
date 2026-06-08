@@ -68,6 +68,11 @@ const polishPlanSchema = z.object({
   recommended_mutations: z.array(recommendedMutationSchema).default([]),
   ready_frontier: z.array(z.string()).default([]),
   blocked_dispatch_reasons: z.array(z.string()).default([]),
+  judge_verdict: z.object({
+    result: z.enum(["Pass", "Fail"]),
+    critique: z.string(),
+    confidence: z.number().min(0).max(1).default(0.5),
+  }),
   judge_scores: z.object({
     behavior_contract_quality: z.number().min(0).max(1),
     implementation_fungibility: z.number().min(0).max(1),
@@ -272,7 +277,12 @@ export default smithers((ctx) => {
               dependency repairs, and label repairs.
               {"\n\n"}
               Return only JSON matching the polish plan schema. Judge scores
-              must be numbers from 0 to 1.
+              must be numbers from 0 to 1. The judge_verdict is advisory:
+              return Pass only if the graph is ready for operator dispatch or
+              the recommended mutations are precise enough for a human to
+              review and apply without product invention; return Fail when
+              the polish result is blocked, vague, unsafe, missing full Bead
+              IDs, or would still require product/architecture invention.
             </>
           )}
         </Task>

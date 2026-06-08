@@ -15,6 +15,7 @@ they do not already emit.
 | `better-beads-authoring-triage-v1` | `better-beads-authoring-triage-v1.schema.json` | `skills/better-beads/scripts/better-beads authoring-triage --json` | Implemented |
 | `better-beads-smithers-check-v1` | `better-beads-smithers-check-v1.schema.json` | `skills/better-beads/scripts/better-beads smithers check --json`; `skills/better-beads/scripts/better-beads smithers check --repo PATH --json` | Implemented |
 | `better-beads-smithers-polish-graph-v1` | `better-beads-smithers-polish-graph-v1.schema.json` | `skills/better-beads/scripts/better-beads smithers polish-graph --json`; `skills/better-beads/scripts/better-beads smithers polish-graph --repo PATH --request TEXT --json` | Implemented |
+| `better-beads-smithers-review-export-v1` | `better-beads-smithers-review-export-v1.schema.json` | `skills/better-beads/scripts/better-beads smithers review-export --json`; `skills/better-beads/scripts/better-beads smithers review-export --run-id RUN --human-label fail --feedback TEXT --json` | Implemented |
 | `better-beads-telemetry-v1` | `better-beads-telemetry-v1.schema.json` | `python3 skills/better-beads/scripts/better_beads_telemetry.py --emit PATH ...` | Implemented |
 
 ## Deferred Contracts

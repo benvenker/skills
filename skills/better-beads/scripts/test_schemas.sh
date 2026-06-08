@@ -37,6 +37,7 @@ SCHEMA_QUALITY="$SCHEMA_DIR/better-beads-quality-gate-v1.schema.json"
 SCHEMA_AUTHORING="$SCHEMA_DIR/better-beads-authoring-triage-v1.schema.json"
 SCHEMA_SMITHERS="$SCHEMA_DIR/better-beads-smithers-check-v1.schema.json"
 SCHEMA_SMITHERS_POLISH="$SCHEMA_DIR/better-beads-smithers-polish-graph-v1.schema.json"
+SCHEMA_SMITHERS_REVIEW="$SCHEMA_DIR/better-beads-smithers-review-export-v1.schema.json"
 SCHEMA_TELEMETRY="$SCHEMA_DIR/better-beads-telemetry-v1.schema.json"
 FAKE_BIN="$TMP_ROOT/bin"
 mkdir -p "$FAKE_BIN"
@@ -590,7 +591,7 @@ case "\${1:-} \${2:-}" in
     ;;
   "smithers-orchestrator output")
     cat <<'JSON'
-{"output":{"verdict":"ready","summary":"Fake Smithers says graph is ready.","recommended_mutations":[],"ready_frontier":["42"],"blocked_dispatch_reasons":[],"judge_scores":{"behavior_contract_quality":0.9,"implementation_fungibility":0.9,"dependency_correctness":0.9,"reviewability":0.9,"dispatch_readiness":0.9}}}
+{"output":{"verdict":"ready","summary":"Fake Smithers says graph is ready.","recommended_mutations":[],"ready_frontier":["42"],"blocked_dispatch_reasons":[],"judge_scores":{"behavior_contract_quality":0.9,"implementation_fungibility":0.9,"dependency_correctness":0.9,"reviewability":0.9,"dispatch_readiness":0.9},"judge_verdict":{"result":"Pass","critique":"The fake graph is ready enough for review.","confidence":0.9}}}
 JSON
     ;;
   "smithers-orchestrator inspect")
@@ -703,7 +704,7 @@ case "${1:-} ${2:-}" in
   "smithers-orchestrator events")
     cat <<'JSONL'
 {"runId":"fake","seq":1,"type":"NodeOutput","payload":{"nodeId":"synthesize-polish-plan","stream":"stdout","text":"{\"verdict\":\"needs_"}}
-{"runId":"fake","seq":2,"type":"NodeOutput","payload":{"nodeId":"synthesize-polish-plan","stream":"stdout","text":"mutation\",\"summary\":\"Recovered from events.\",\"recommended_mutations\":[],\"ready_frontier\":[],\"blocked_dispatch_reasons\":[\"output row was null\"],\"judge_scores\":{\"behavior_contract_quality\":0.5,\"implementation_fungibility\":0.5,\"dependency_correctness\":0.5,\"reviewability\":0.5,\"dispatch_readiness\":0.1}}"}}
+{"runId":"fake","seq":2,"type":"NodeOutput","payload":{"nodeId":"synthesize-polish-plan","stream":"stdout","text":"mutation\",\"summary\":\"Recovered from events.\",\"recommended_mutations\":[],\"ready_frontier\":[],\"blocked_dispatch_reasons\":[\"output row was null\"],\"judge_scores\":{\"behavior_contract_quality\":0.5,\"implementation_fungibility\":0.5,\"dependency_correctness\":0.5,\"reviewability\":0.5,\"dispatch_readiness\":0.1},\"judge_verdict\":{\"result\":\"Fail\",\"critique\":\"The graph still needs mutation.\",\"confidence\":0.8}}"}}
 JSONL
     ;;
   "smithers-orchestrator workflow")
@@ -794,6 +795,84 @@ assert payload["chat_command"], payload
 assert payload["logs_command"], payload
 assert payload["scores_command"], payload
 PY
+
+  repo="$TMP_ROOT/smithers-review-export"
+  write_valid_issue_repo "$repo" 0
+  mkdir -p "$repo/.smithers/workflows"
+  printf '// fake workflow fixture\n' >"$repo/.smithers/workflows/better-beads-polish-graph.tsx"
+  fake_review_bin="$TMP_ROOT/fake-bun-review-bin"
+  review_calls_log="$TMP_ROOT/fake-bun-review-calls.log"
+  mkdir -p "$fake_review_bin"
+  cat >"$fake_review_bin/bunx" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$review_calls_log"
+case "\${1:-} \${2:-}" in
+  "smithers-orchestrator output")
+    cat <<'JSON'
+{"output":{"verdict":"ready","summary":"Ready according to fake review export.","recommended_mutations":[],"ready_frontier":["bd-schema-smoke"],"blocked_dispatch_reasons":[],"judge_scores":{"behavior_contract_quality":0.88,"implementation_fungibility":0.84,"dependency_correctness":0.91,"reviewability":0.86,"dispatch_readiness":0.9},"judge_verdict":{"result":"Pass","critique":"The fake exported graph looks ready.","confidence":0.87}}}
+JSON
+    ;;
+  "smithers-orchestrator inspect")
+    cat <<'JSON'
+{"status":"completed","nodes":{"synthesize-polish-plan":{"state":"completed"}}}
+JSON
+    ;;
+  "smithers-orchestrator node")
+    cat <<'JSON'
+{"output":{"validated":null,"raw":null,"source":"none","cacheKey":null}}
+JSON
+    ;;
+  "smithers-orchestrator events")
+    printf ''
+    ;;
+  "smithers-orchestrator scores")
+    cat <<'JSON'
+{"scores":[{"node":"synthesize-polish-plan","scorer":"schema","score":"1.00","reason":"schema ok","source":"smithers"}]}
+JSON
+    ;;
+  *)
+    echo "unexpected fake bunx invocation: \$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$fake_review_bin/bunx"
+  run_json_producer_case "$SCHEMA_SMITHERS_REVIEW" "smithers-review-export" "better-beads smithers review-export --json" \
+    env PATH="$fake_review_bin:$FAKE_BIN:/usr/bin:/bin" bash "$SCRIPT_DIR/better-beads" smithers review-export --repo "$repo" --run-id better-beads-polish-graph-fake --human-label fail --feedback "Too vague for dispatch" --reviewer ben --json
+  python3 - "$TMP_ROOT/smithers-review-export.json" "$repo" "$review_calls_log" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo = Path(sys.argv[2]).resolve()
+calls = Path(sys.argv[3]).read_text(encoding="utf-8")
+assert payload["repo"] == str(repo), payload
+assert payload["schema"] == "better-beads-smithers-review-export-v1", payload
+assert payload["available"] is True, payload
+assert payload["run_ids"] == ["better-beads-polish-graph-fake"], payload
+assert len(payload["items"]) == 1, payload
+item = payload["items"][0]
+assert item["run_id"] == "better-beads-polish-graph-fake", item
+assert item["result"]["verdict"] == "ready", item
+assert item["result_source"] == "output_row", item
+assert item["judge_verdict"]["result"] == "Pass", item
+assert item["human_review"]["label"] == "Fail", item
+assert item["human_review"]["feedback"] == "Too vague for dispatch", item
+assert item["eval_case"]["annotations"]["human_label"] == "Fail", item
+assert item["eval_case"]["annotations"]["judge_result"] == "Pass", item
+assert item["eval_case"]["annotations"]["judge_disagreement"] is True, item
+assert item["eval_case"]["metadata"]["human_review"]["feedback"] == "Too vague for dispatch", item
+assert item["smithers_scores"][0]["scorer"] == "schema", item
+assert item["beads"][0]["id"] == "bd-schema-smoke", item
+assert item["commands"]["scores"].endswith("--node synthesize-polish-plan"), item
+assert "smithers-orchestrator output" in calls, calls
+assert "smithers-orchestrator node" in calls, calls
+assert "smithers-orchestrator events" in calls, calls
+assert "smithers-orchestrator scores" in calls, calls
+PY
+
   mkdir -p "$repo/.smithers/evals"
   cp "$SCRIPT_DIR/../smithers-templates/better-beads-polish-graph.eval.jsonl" "$repo/.smithers/evals/better-beads-polish-graph.eval.jsonl"
   eval_stdout="$TMP_ROOT/smithers-polish-eval-dry-run.stdout"

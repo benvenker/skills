@@ -28,6 +28,8 @@ Commands:
   smithers check --json     Report local Smithers availability without invoking Smithers
   smithers polish-graph --json
                             Run optional Smithers polish workflow and return recommendations
+  smithers review-export --json
+                            Export completed Smithers polish runs for post-hoc human review
   triage --json             Print quick command recommendations as JSON
   capabilities --json       Print machine-readable CLI contract
   robot-docs guide          Print an agent-oriented guide
@@ -45,6 +47,7 @@ Examples:
   better-beads semantic-pack --markdown
   better-beads smithers check --json
   better-beads smithers polish-graph --json
+  better-beads smithers review-export --run-id RUN --json
   better-beads smithers check --repo /tmp --json
   better-beads gate-loop --repo . --operator-dispatch
   better-beads closeout-guard --repo . --json
@@ -84,6 +87,7 @@ capabilities_json() {
     {"argv": ["semantic-pack", "--markdown"], "stdout_schema": "markdown"},
     {"argv": ["smithers", "check", "--json"], "stdout_schema": "better-beads-smithers-check-v1"},
     {"argv": ["smithers", "polish-graph", "--json"], "stdout_schema": "better-beads-smithers-polish-graph-v1"},
+    {"argv": ["smithers", "review-export", "--json"], "stdout_schema": "better-beads-smithers-review-export-v1"},
     {"argv": ["close-continue", "--id", "ID", "--reason", "TEXT", "--json"], "stdout_schema": "better-beads-close-continue-v1"}
   ],
   "commands": [
@@ -98,7 +102,8 @@ capabilities_json() {
     {"name": "semantic-pack", "argv": ["semantic-pack", "--json"], "stdout_schema": "better-beads-semantic-pack-v1"},
     {"name": "smithers", "subcommands": [
       {"name": "check", "argv": ["smithers", "check", "--json"], "stdout_schema": "better-beads-smithers-check-v1"},
-      {"name": "polish-graph", "argv": ["smithers", "polish-graph", "--json"], "stdout_schema": "better-beads-smithers-polish-graph-v1"}
+      {"name": "polish-graph", "argv": ["smithers", "polish-graph", "--json"], "stdout_schema": "better-beads-smithers-polish-graph-v1"},
+      {"name": "review-export", "argv": ["smithers", "review-export", "--json"], "stdout_schema": "better-beads-smithers-review-export-v1"}
     ]},
     {"name": "triage", "argv": ["triage", "--json"], "stdout_schema": "better-beads-triage-v1"},
     {"name": "capabilities", "argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
@@ -113,6 +118,7 @@ capabilities_json() {
     "bash $SCRIPT_DIR/better-beads semantic-pack --markdown",
     "bash $SCRIPT_DIR/better-beads smithers check --json",
     "bash $SCRIPT_DIR/better-beads smithers polish-graph --json",
+    "bash $SCRIPT_DIR/better-beads smithers review-export --run-id RUN --json",
     "bash $SCRIPT_DIR/better-beads triage --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
@@ -136,6 +142,7 @@ triage_json() {
     "Use semantic-pack to collect graph review artifacts for human or oracle review.",
     "Use smithers check --json to inspect local Smithers prerequisites without running Smithers.",
     "Use smithers polish-graph --json to collect optional recommendation-only Smithers graph polish.",
+    "Use smithers review-export --json to project completed Smithers polish runs into human-review/eval items.",
     "Use quality-gate for deterministic bead description checks.",
     "Use gate-loop before dispatching implementation agents.",
     "Use closeout-guard before ending implementation/operator swarms.",
@@ -149,6 +156,7 @@ triage_json() {
     "bash $SCRIPT_DIR/better-beads semantic-pack --json",
     "bash $SCRIPT_DIR/better-beads smithers check --json",
     "bash $SCRIPT_DIR/better-beads smithers polish-graph --json",
+    "bash $SCRIPT_DIR/better-beads smithers review-export --run-id RUN --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
     "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json",
@@ -161,6 +169,7 @@ triage_json() {
     "semantic-pack": "scripts/better-beads semantic-pack --json",
     "smithers-check": "scripts/better-beads smithers check --json",
     "smithers-polish-graph": "scripts/better-beads smithers polish-graph --json",
+    "smithers-review-export": "scripts/better-beads smithers review-export --json",
     "quality-gate": "scripts/bead_quality_gate.py",
     "gate-loop": "scripts/bead_gate_loop.sh",
     "closeout-guard": "scripts/bead_closeout_guard.sh",
@@ -1612,8 +1621,12 @@ print(json.dumps(base_payload, indent=2, sort_keys=True))
 PY
 }
 
+smithers_review_export_json() {
+  node "$SCRIPT_DIR/smithers_review_export.ts" "$CONTRACT_VERSION" "$SCRIPT_DIR" "$@"
+}
+
 smithers_usage() {
-  echo "Use: $(basename "$0") smithers (check|polish-graph) [args] --json" >&2
+  echo "Use: $(basename "$0") smithers (check|polish-graph|review-export) [args] --json" >&2
   exit 2
 }
 
@@ -1636,6 +1649,7 @@ scripts/better-beads semantic-pack --json
 scripts/better-beads semantic-pack --markdown
 scripts/better-beads smithers check --json
 scripts/better-beads smithers polish-graph --json
+scripts/better-beads smithers review-export --run-id RUN --json
 scripts/better-beads triage --json
 scripts/better-beads quality-gate --repo . --report markdown --fail-on never
 scripts/better-beads gate-loop --repo . --operator-dispatch
@@ -1652,6 +1666,7 @@ scripts/better-beads close-continue --id bd-123 --reason validated --json
 - `semantic-pack --json` and `semantic-pack --markdown` collect graph review artifacts and the semantic judge prompt without calling a networked LLM.
 - `smithers check --json` reports local Smithers availability without invoking `bunx` or Smithers.
 - `smithers polish-graph --json` runs the optional Smithers graph polish workflow when available and returns a recommendation-only envelope. It rejects `--apply`; any changes must be applied manually through reviewed `br` commands.
+- `smithers review-export --json` projects completed Smithers polish runs into post-hoc human review/eval items. It reads Smithers `output`, `node`, `events`, and `scores`; it does not mutate Beads.
 - `quality-gate` delegates to `bead_quality_gate.py`.
 - `gate-loop` delegates to `bead_gate_loop.sh`.
 - `closeout-guard` delegates to `bead_closeout_guard.sh`.
@@ -1671,6 +1686,7 @@ scripts/better-beads close-continue --id bd-123 --reason validated --json
 - `semantic-pack --json` emits `better-beads-semantic-pack-v1`; gate failures are included as review blockers.
 - `smithers check --json` emits `better-beads-smithers-check-v1` and is read-only.
 - `smithers polish-graph --json` emits `better-beads-smithers-polish-graph-v1`; it may invoke Smithers only after `smithers check` prerequisites pass and never runs `scores`.
+- `smithers review-export --json` emits `better-beads-smithers-review-export-v1`; it may run Smithers inspection and `scores` commands for completed runs.
 - Usage errors go to stderr and exit `2`.
 - Delegated commands preserve the underlying command's exit code.
 EOF
@@ -1776,6 +1792,9 @@ case "$cmd" in
     elif [[ "${1:-}" == "polish-graph" ]]; then
       shift
       smithers_polish_graph_json "$@"
+    elif [[ "${1:-}" == "review-export" ]]; then
+      shift
+      smithers_review_export_json "$@"
     else
       smithers_usage
     fi
