@@ -13,3 +13,6 @@ prompt-exports/
 
 # CASS local project memory and privacy audit artifacts
 .cass/
+
+# Smithers runtime state
+smithers.db*
