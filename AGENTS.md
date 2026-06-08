@@ -262,6 +262,23 @@ br sync --flush-only  # Export to JSONL (NO git operations)
 
 ---
 
+## CM / CASS Project Memory
+
+Before non-trivial work in this repo, run:
+
+```bash
+cm context "<task description>" --json
+```
+
+- Treat CM warnings about repo-local setup as memory ergonomics, not a CASS outage.
+- CASS is not a validation gate for unrelated CM/hook/setup work. Use `cass health --json --robot-meta --stale-threshold 1800` only as a bounded smoke check. If CASS reports active scheduled maintenance, record it as transient and continue. Do not run `cass index`, `cass status`, or `cass search --refresh` unless the task is specifically to repair CASS.
+- Reference useful CM rule IDs in work summaries when they materially informed a decision.
+- Do not run the bare `cass` TUI. Use JSON, robot, or bounded searches such as `cass search "<query>" --json --limit 10`.
+- Use lexical CASS search for exact prompt/session recovery, semantic search for related context, and hybrid search when both are healthy.
+- Do not run `cm reflect` routinely inside normal agent turns when scheduled reflection already exists.
+
+---
+
 ## bv — Graph-Aware Triage Engine
 
 bv is a graph-aware triage engine for Beads projects (`.beads/beads.jsonl`). It computes PageRank, betweenness, critical path, cycles, HITS, eigenvector, and k-core metrics deterministically.

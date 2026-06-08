@@ -10,3 +10,6 @@ prompt-exports/
 
 # ntm local run logs and session state
 .ntm/
+
+# CASS local project memory and privacy audit artifacts
+.cass/
