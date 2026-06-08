@@ -65,6 +65,28 @@ The stable final output node is:
 synthesize-polish-plan
 ```
 
+If `output` returns `null`, the Better Beads wrapper falls back to structured
+Smithers inspection instead of scraping pretty chat text:
+
+```bash
+bunx smithers-orchestrator node synthesize-polish-plan \
+  --run-id <run-id> \
+  --format json \
+  --filter-output output
+
+bunx smithers-orchestrator events <run-id> \
+  --node synthesize-polish-plan \
+  --type output \
+  --json \
+  --limit 100000
+```
+
+The events fallback reconstructs ordered `NodeOutput` stdout chunks and accepts
+only the last schema-valid polish-plan JSON object. The wrapper reports
+`result_source` as `output_row`, `node_validated`, `output_events`, or `none`.
+Failures include exact `output`, `inspect`, `node`, `events`, `chat`, `logs`,
+and `scores` commands for operator follow-up.
+
 The workflow result is a recommendation, not an applied graph mutation. Review any suggested command or mutation before using `br`.
 
 In the current v1 template, reviewer and synthesis `PiAgent`s load the
@@ -84,6 +106,17 @@ or custom tool that allows only reviewed `br update`, dependency, and label
 mutations.
 
 ## Scores
+
+This installed Smithers CLI version does not expose a top-level `verify`
+command. Use the following verification surfaces instead:
+
+```bash
+bunx smithers-orchestrator workflow doctor --format json
+bunx smithers-orchestrator graph .smithers/workflows/better-beads-polish-graph.tsx --format json
+bunx smithers-orchestrator inspect <run-id> --format json
+bunx smithers-orchestrator node synthesize-polish-plan --run-id <run-id> --format json --filter-output output
+bunx smithers-orchestrator events <run-id> --node synthesize-polish-plan --type output --json --limit 100000
+```
 
 For a completed polish run, inspect Smithers scores directly:
 

@@ -15,6 +15,10 @@
     "run_id",
     "inspect_command",
     "output_command",
+    "node_command",
+    "events_command",
+    "chat_command",
+    "logs_command",
     "scores_command",
     "request",
     "checks",
@@ -22,6 +26,7 @@
     "local_inspection",
     "smithers",
     "result",
+    "result_source",
     "result_error",
     "error"
   ],
@@ -62,6 +67,30 @@
         "null"
       ]
     },
+    "node_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "events_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "chat_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "logs_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "scores_command": {
       "type": [
         "string",
@@ -95,7 +124,10 @@
       "required": [
         "up",
         "output",
-        "inspect"
+        "inspect",
+        "node",
+        "events",
+        "workflow_doctor"
       ],
       "properties": {
         "up": {
@@ -118,6 +150,27 @@
             "null"
           ],
           "additionalProperties": true
+        },
+        "node": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "events": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "workflow_doctor": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
         }
       }
     },
@@ -127,6 +180,14 @@
         "null"
       ],
       "additionalProperties": true
+    },
+    "result_source": {
+      "enum": [
+        "output_row",
+        "node_validated",
+        "output_events",
+        "none"
+      ]
     },
     "result_error": {
       "type": [

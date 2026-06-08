@@ -147,7 +147,11 @@ export default smithers((ctx) => {
             continue recommendation-only review. Use the Better Beads skill and
             read-only repo inspection where useful. You may read and grep files
             for context, but you must not run shell commands, edit files, mutate
-            Beads, close issues, commit, push, or implement any Bead.
+            Beads, close issues, commit, push, or implement any Bead. Treat
+            localInspection.context_pack as the authoritative Beads graph pack
+            when present. Use full Bead IDs exactly as given. Distinguish
+            contract updates to existing Beads from new-Bead suggestions,
+            dependency repairs, and label repairs.
             {"\n\n"}
             Return only JSON matching the reviewer finding schema with reviewer
             set to "behavior-contract".
@@ -172,7 +176,11 @@ export default smithers((ctx) => {
             continue recommendation-only review. Use the Better Beads skill and
             read-only repo inspection where useful. You may read and grep files
             for context, but you must not run shell commands, edit files, mutate
-            Beads, close issues, commit, push, or implement any Bead.
+            Beads, close issues, commit, push, or implement any Bead. Treat
+            localInspection.context_pack as the authoritative Beads graph pack
+            when present. Use full Bead IDs exactly as given. Distinguish
+            contract updates to existing Beads from new-Bead suggestions,
+            dependency repairs, and label repairs.
             {"\n\n"}
             Return only JSON matching the reviewer finding schema with reviewer
             set to "implementation-agent".
@@ -197,7 +205,10 @@ export default smithers((ctx) => {
             Use the Better Beads skill and read-only repo inspection where
             useful. You may read and grep files for context, but you must not
             run shell commands, edit files, mutate Beads, close issues, commit,
-            push, or implement any Bead.
+            push, or implement any Bead. Treat localInspection.context_pack as
+            the authoritative Beads graph pack when present. Use full Bead IDs
+            exactly as given. Distinguish contract updates to existing Beads
+            from new-Bead suggestions, dependency repairs, and label repairs.
             {"\n\n"}
             Return only JSON matching the reviewer finding schema with reviewer
             set to "dependency-reviewability".
@@ -254,7 +265,11 @@ export default smithers((ctx) => {
               Use the Better Beads skill and read-only repo inspection where
               useful. You may read and grep files for context, but you must not
               run shell commands, edit files, mutate Beads, close issues,
-              commit, push, or implement any Bead.
+              commit, push, or implement any Bead. Treat
+              localInspection.context_pack as the authoritative Beads graph pack
+              when present. Use full Bead IDs exactly as given. Distinguish
+              contract updates to existing Beads from new-Bead suggestions,
+              dependency repairs, and label repairs.
               {"\n\n"}
               Return only JSON matching the polish plan schema. Judge scores
               must be numbers from 0 to 1.

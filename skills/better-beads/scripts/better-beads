@@ -1161,7 +1161,13 @@ def parse_json(text: str) -> tuple[Any | None, str | None]:
         return None, str(exc)
 
 
-def command_record(argv: list[str], *, parse_stdout: bool, actual_argv: list[str] | None = None) -> dict[str, Any]:
+def command_record(
+    argv: list[str],
+    *,
+    parse_stdout: bool,
+    actual_argv: list[str] | None = None,
+    keep_stdout: bool = False,
+) -> dict[str, Any]:
     actual = actual_argv if actual_argv is not None else argv
     result = subprocess.run(
         actual,
@@ -1181,6 +1187,8 @@ def command_record(argv: list[str], *, parse_stdout: bool, actual_argv: list[str
     if parse_stdout:
         record["stdout_json"] = stdout_json
         record["parse_error"] = parse_error
+    if keep_stdout:
+        record["stdout"] = result.stdout
     return record
 
 
@@ -1206,7 +1214,159 @@ def extract_polish_result(value: Any) -> tuple[dict[str, Any] | None, str | None
             candidate = value.get(key)
             if looks_like_polish_result(candidate):
                 return candidate, None
+        row = value.get("row")
+        if isinstance(row, dict):
+            nested, _ = extract_polish_result(row)
+            if nested is not None:
+                return nested, None
     return None, "could not locate polish result in output row"
+
+
+def extract_node_validated(value: Any) -> tuple[dict[str, Any] | None, str | None]:
+    if not isinstance(value, dict):
+        return None, "Smithers node output was not an object"
+    output = value.get("output")
+    if isinstance(output, dict):
+        validated = output.get("validated")
+        if looks_like_polish_result(validated):
+            return validated, None
+        raw = output.get("raw")
+        if looks_like_polish_result(raw):
+            return raw, None
+    return None, "could not locate polish result in node output"
+
+
+def parse_events_ndjson(text: str) -> tuple[list[dict[str, Any]], str | None]:
+    events: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except Exception as exc:
+            errors.append(f"line {index}: {exc}")
+            continue
+        if isinstance(parsed, dict):
+            events.append(parsed)
+        else:
+            errors.append(f"line {index}: expected object")
+    return events, "; ".join(errors) if errors else None
+
+
+def json_candidates_from_text(text: str) -> list[Any]:
+    decoder = json.JSONDecoder()
+    candidates: list[Any] = []
+    for index, char in enumerate(text):
+        if char not in "[{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+        except Exception:
+            continue
+        candidates.append(value)
+    return candidates
+
+
+def extract_polish_result_from_events(events: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str | None]:
+    chunks: list[tuple[int, str]] = []
+    for event in events:
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("nodeId") != "synthesize-polish-plan":
+            continue
+        if payload.get("stream") not in (None, "stdout"):
+            continue
+        text = payload.get("text")
+        if not isinstance(text, str) or not text:
+            continue
+        seq = event.get("seq")
+        if not isinstance(seq, int):
+            seq = len(chunks)
+        chunks.append((seq, text))
+    if not chunks:
+        return None, "could not locate synthesize-polish-plan stdout chunks in Smithers events"
+    combined = "".join(text for _, text in sorted(chunks, key=lambda item: item[0]))
+    valid: list[dict[str, Any]] = []
+    for candidate in json_candidates_from_text(combined):
+        if looks_like_polish_result(candidate):
+            valid.append(candidate)
+    if valid:
+        return valid[-1], None
+    return None, "could not parse schema-valid polish result from Smithers output events"
+
+
+def normalize_dependency_ids(issue: dict[str, Any], key: str) -> list[str]:
+    raw = issue.get(key)
+    if not isinstance(raw, list):
+        return []
+    ids: list[str] = []
+    for entry in raw:
+        if isinstance(entry, str):
+            ids.append(entry)
+        elif isinstance(entry, dict) and isinstance(entry.get("id"), str):
+            ids.append(entry["id"])
+    return ids
+
+
+def compact_issue(issue: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": issue.get("id"),
+        "title": issue.get("title"),
+        "status": issue.get("status"),
+        "priority": issue.get("priority"),
+        "issue_type": issue.get("issue_type") or issue.get("type"),
+        "labels": issue.get("labels") if isinstance(issue.get("labels"), list) else [],
+        "parent": issue.get("parent"),
+        "dependencies": normalize_dependency_ids(issue, "dependencies"),
+        "dependents": normalize_dependency_ids(issue, "dependents"),
+        "description": issue.get("description") if isinstance(issue.get("description"), str) else "",
+    }
+
+
+def build_context_pack(authoring_record: dict[str, Any], gate_record: dict[str, Any]) -> dict[str, Any]:
+    authoring_json = authoring_record.get("stdout_json")
+    command_statuses = authoring_json.get("command_statuses") if isinstance(authoring_json, dict) else None
+    issues_by_id: dict[str, dict[str, Any]] = {}
+    for command_name in ("br_list", "br_ready", "br_blocked"):
+        status = command_statuses.get(command_name) if isinstance(command_statuses, dict) else None
+        stdout_json = status.get("stdout_json") if isinstance(status, dict) else None
+        if isinstance(stdout_json, list):
+            for issue in stdout_json:
+                if isinstance(issue, dict) and isinstance(issue.get("id"), str):
+                    issues_by_id[issue["id"]] = compact_issue(issue)
+    if not issues_by_id:
+        list_record = command_record(["br", "list", "--json"], parse_stdout=True)
+        if isinstance(list_record.get("stdout_json"), list):
+            for issue in list_record["stdout_json"]:
+                if isinstance(issue, dict) and isinstance(issue.get("id"), str):
+                    issues_by_id[issue["id"]] = compact_issue(issue)
+    gate_json = gate_record.get("stdout_json")
+    context_pack = {
+        "source": "better-beads smithers polish-graph local inspection",
+        "target_node": "synthesize-polish-plan",
+        "beads": sorted(issues_by_id.values(), key=lambda issue: str(issue.get("id") or "")),
+        "gate": {
+            "exit_code": gate_record.get("exit_code"),
+            "artifacts": gate_json.get("artifacts") if isinstance(gate_json, dict) else None,
+            "blocked_reasons": gate_json.get("blocked_reasons") if isinstance(gate_json, dict) else [],
+            "finding_counts": gate_json.get("finding_counts") if isinstance(gate_json, dict) else {},
+            "command_statuses": gate_json.get("command_statuses") if isinstance(gate_json, dict) else {},
+            "parse_failures": gate_json.get("parse_failures") if isinstance(gate_json, dict) else [],
+            "schema_failures": gate_json.get("schema_failures") if isinstance(gate_json, dict) else [],
+            "inspection_error_envelopes": gate_json.get("inspection_error_envelopes") if isinstance(gate_json, dict) else {},
+        },
+        "operator_commands": {
+            "br_list": "br list --json",
+            "br_ready": "br ready --json",
+            "br_blocked": "br blocked --json",
+            "br_dep_cycles": "br dep cycles --json",
+            "bv_plan": "bv --robot-plan",
+            "bv_insights": "bv --robot-insights",
+        },
+    }
+    return context_pack
 
 
 available, checks, missing = smithers_checks()
@@ -1220,6 +1380,10 @@ base_payload: dict[str, Any] = {
     "run_id": None,
     "inspect_command": None,
     "output_command": None,
+    "node_command": None,
+    "events_command": None,
+    "chat_command": None,
+    "logs_command": None,
     "scores_command": None,
     "request": request,
     "checks": checks,
@@ -1233,8 +1397,12 @@ base_payload: dict[str, Any] = {
         "up": None,
         "output": None,
         "inspect": None,
+        "node": None,
+        "events": None,
+        "workflow_doctor": None,
     },
     "result": None,
+    "result_source": "none",
     "result_error": None,
     "error": None,
 }
@@ -1270,6 +1438,7 @@ local_inspection: dict[str, Any] = {
     "gate_loop": gate,
     "errors": inspection_errors,
 }
+local_inspection["context_pack"] = build_context_pack(authoring, gate)
 
 input_payload: dict[str, Any] = {
     "request": request,
@@ -1296,6 +1465,34 @@ timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 run_id = f"better-beads-polish-graph-{timestamp}-{run_hash}"
 output_command = ["bunx", "smithers-orchestrator", "output", run_id, "synthesize-polish-plan", "--json"]
 inspect_command = ["bunx", "smithers-orchestrator", "inspect", run_id, "--format", "json"]
+node_command = [
+    "bunx",
+    "smithers-orchestrator",
+    "node",
+    "synthesize-polish-plan",
+    "--run-id",
+    run_id,
+    "--format",
+    "json",
+    "--filter-output",
+    "output",
+]
+events_command = [
+    "bunx",
+    "smithers-orchestrator",
+    "events",
+    run_id,
+    "--node",
+    "synthesize-polish-plan",
+    "--type",
+    "output",
+    "--json",
+    "--limit",
+    "100000",
+]
+workflow_doctor_command = ["bunx", "smithers-orchestrator", "workflow", "doctor", "--format", "json"]
+chat_command = ["bunx", "smithers-orchestrator", "chat", run_id, "--tail", "20"]
+logs_command = ["bunx", "smithers-orchestrator", "logs", run_id, "--tail", "80"]
 scores_command = ["bunx", "smithers-orchestrator", "scores", run_id, "--node", "synthesize-polish-plan"]
 up_display_command = [
     "bunx",
@@ -1321,26 +1518,60 @@ up_actual_command = [
 base_payload["run_id"] = run_id
 base_payload["output_command"] = " ".join(output_command)
 base_payload["inspect_command"] = " ".join(inspect_command)
+base_payload["node_command"] = " ".join(node_command)
+base_payload["events_command"] = " ".join(events_command)
+base_payload["chat_command"] = " ".join(chat_command)
+base_payload["logs_command"] = " ".join(logs_command)
 base_payload["scores_command"] = " ".join(scores_command)
 
 up_record = command_record(up_display_command, parse_stdout=False, actual_argv=up_actual_command)
 output_record = command_record(output_command, parse_stdout=True)
 inspect_record = command_record(inspect_command, parse_stdout=True)
+node_record = command_record(node_command, parse_stdout=True)
+events_record = command_record(events_command, parse_stdout=False, keep_stdout=True)
+events_json, events_parse_error = parse_events_ndjson(str(events_record.get("stdout") or ""))
+events_record["stdout_json"] = events_json
+events_record["parse_error"] = events_parse_error
+events_record.pop("stdout", None)
+workflow_doctor_record = command_record(workflow_doctor_command, parse_stdout=True)
 
 base_payload["smithers"] = {
     "up": up_record,
     "output": output_record,
     "inspect": inspect_record,
+    "node": node_record,
+    "events": events_record,
+    "workflow_doctor": workflow_doctor_record,
 }
 
 result, result_error = extract_polish_result(output_record.get("stdout_json"))
+result_source = "output_row" if result is not None else "none"
+extraction_errors: list[str] = []
+if result_error:
+    extraction_errors.append(result_error)
 if result is None:
-    inspect_result, inspect_error = extract_polish_result(inspect_record.get("stdout_json"))
-    if inspect_result is not None:
-        result = inspect_result
+    node_result, node_error = extract_node_validated(node_record.get("stdout_json"))
+    if node_result is not None:
+        result = node_result
+        result_source = "node_validated"
         result_error = None
     else:
-        result_error = result_error or inspect_error
+        extraction_errors.append(node_error)
+        event_result, event_error = extract_polish_result_from_events(events_json)
+        if event_result is not None:
+            result = event_result
+            result_source = "output_events"
+            result_error = None
+        else:
+            extraction_errors.append(event_error)
+            inspect_result, inspect_error = extract_polish_result(inspect_record.get("stdout_json"))
+            if inspect_result is not None:
+                result = inspect_result
+                result_source = "output_row"
+                result_error = None
+            else:
+                extraction_errors.append(inspect_error)
+                result_error = "; ".join(error for error in extraction_errors if error)
 
 diagnostics = []
 if up_record["exit_code"] == 3:
@@ -1355,10 +1586,19 @@ if inspect_record["exit_code"] != 0:
     diagnostics.append(f"Smithers inspect exited {inspect_record['exit_code']}.")
 if inspect_record.get("parse_error"):
     diagnostics.append(f"Smithers inspect JSON parse failed: {inspect_record['parse_error']}.")
+if node_record["exit_code"] != 0:
+    diagnostics.append(f"Smithers node exited {node_record['exit_code']}.")
+if node_record.get("parse_error"):
+    diagnostics.append(f"Smithers node JSON parse failed: {node_record['parse_error']}.")
+if events_record["exit_code"] != 0:
+    diagnostics.append(f"Smithers events exited {events_record['exit_code']}.")
+if events_record.get("parse_error"):
+    diagnostics.append(f"Smithers events NDJSON parse failed: {events_record['parse_error']}.")
 if result_error:
     diagnostics.append(result_error)
 
 base_payload["result"] = result
+base_payload["result_source"] = result_source
 base_payload["result_error"] = result_error
 base_payload["error"] = "; ".join(diagnostics) if diagnostics else None
 

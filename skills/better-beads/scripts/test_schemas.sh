@@ -598,6 +598,19 @@ JSON
 {"status":"completed","nodes":{"synthesize-polish-plan":{"state":"completed"}}}
 JSON
     ;;
+  "smithers-orchestrator node")
+    cat <<'JSON'
+{"output":{"validated":null,"raw":null,"source":"none","cacheKey":null}}
+JSON
+    ;;
+  "smithers-orchestrator events")
+    printf ''
+    ;;
+  "smithers-orchestrator workflow")
+    cat <<'JSON'
+{"workflowRoot":"/tmp/fake","workflows":[{"id":"better-beads-polish-graph"}],"agents":[]}
+JSON
+    ;;
   "smithers-orchestrator eval")
     case " \$* " in
       *" --dry-run "*) ;;
@@ -640,15 +653,146 @@ assert payload["available"] is True, payload
 assert payload["request"] == "Fake request", payload
 assert payload["result"]["verdict"] == "ready", payload
 assert payload["result"]["summary"] == "Fake Smithers says graph is ready.", payload
+assert payload["result_source"] == "output_row", payload
+assert payload["node_command"], payload
+assert payload["events_command"], payload
+assert payload["chat_command"], payload
+assert payload["logs_command"], payload
 assert payload["smithers"]["up"]["exit_code"] == 0, payload
 assert payload["smithers"]["output"]["exit_code"] == 0, payload
 assert payload["smithers"]["inspect"]["exit_code"] == 0, payload
+assert payload["smithers"]["node"]["exit_code"] == 0, payload
+assert payload["smithers"]["events"]["exit_code"] == 0, payload
+assert payload["smithers"]["workflow_doctor"]["exit_code"] == 0, payload
 assert payload["smithers"]["output"]["parse_error"] is None, payload
+assert payload["local_inspection"]["context_pack"]["beads"], payload
 assert payload["scores_command"], payload
 assert "scores" not in calls, calls
 assert "smithers-orchestrator up" in calls, calls
 assert "smithers-orchestrator output" in calls, calls
 assert "smithers-orchestrator inspect" in calls, calls
+assert "smithers-orchestrator node" in calls, calls
+assert "smithers-orchestrator events" in calls, calls
+assert "smithers-orchestrator workflow doctor" in calls, calls
+PY
+
+  repo="$TMP_ROOT/smithers-polish-events"
+  write_valid_issue_repo "$repo" 0
+  mkdir -p "$repo/.smithers/workflows"
+  printf '// fake workflow fixture\n' >"$repo/.smithers/workflows/better-beads-polish-graph.tsx"
+  fake_events_bin="$TMP_ROOT/fake-bun-polish-events-bin"
+  events_calls_log="$TMP_ROOT/fake-bun-polish-events-calls.log"
+  mkdir -p "$fake_events_bin"
+  cat >"$fake_events_bin/bunx" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$events_calls_log"
+case "${1:-} ${2:-}" in
+  "smithers-orchestrator up")
+    exit 0
+    ;;
+  "smithers-orchestrator output")
+    printf 'null\n'
+    ;;
+  "smithers-orchestrator inspect")
+    printf '{"status":"completed","nodes":{"synthesize-polish-plan":{"state":"completed"}}}\n'
+    ;;
+  "smithers-orchestrator node")
+    printf '{"output":{"validated":null,"raw":null,"source":"none","cacheKey":null}}\n'
+    ;;
+  "smithers-orchestrator events")
+    cat <<'JSONL'
+{"runId":"fake","seq":1,"type":"NodeOutput","payload":{"nodeId":"synthesize-polish-plan","stream":"stdout","text":"{\"verdict\":\"needs_"}}
+{"runId":"fake","seq":2,"type":"NodeOutput","payload":{"nodeId":"synthesize-polish-plan","stream":"stdout","text":"mutation\",\"summary\":\"Recovered from events.\",\"recommended_mutations\":[],\"ready_frontier\":[],\"blocked_dispatch_reasons\":[\"output row was null\"],\"judge_scores\":{\"behavior_contract_quality\":0.5,\"implementation_fungibility\":0.5,\"dependency_correctness\":0.5,\"reviewability\":0.5,\"dispatch_readiness\":0.1}}"}}
+JSONL
+    ;;
+  "smithers-orchestrator workflow")
+    printf '{"workflowRoot":"/tmp/fake","workflows":[{"id":"better-beads-polish-graph"}],"agents":[]}\n'
+    ;;
+  *)
+    echo "unexpected fake bunx invocation: $*" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$fake_events_bin/bunx"
+  run_json_producer_case "$SCHEMA_SMITHERS_POLISH" "smithers-polish-events" "better-beads smithers polish-graph --json events fallback" \
+    env PATH="$fake_events_bin:$FAKE_BIN:/usr/bin:/bin" events_calls_log="$events_calls_log" bash "$SCRIPT_DIR/better-beads" smithers polish-graph --repo "$repo" --request "Fake request" --json
+  python3 - "$TMP_ROOT/smithers-polish-events.json" "$repo" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo = Path(sys.argv[2]).resolve()
+assert payload["repo"] == str(repo), payload
+assert payload["result"]["verdict"] == "needs_mutation", payload
+assert payload["result"]["summary"] == "Recovered from events.", payload
+assert payload["result_source"] == "output_events", payload
+assert payload["result_error"] is None, payload
+assert payload["error"] is None, payload
+assert payload["smithers"]["output"]["stdout_json"] is None, payload
+assert len(payload["smithers"]["events"]["stdout_json"]) == 2, payload
+assert payload["local_inspection"]["context_pack"]["beads"][0]["id"] == "bd-schema-smoke", payload
+assert payload["local_inspection"]["context_pack"]["gate"]["artifacts"] is not None, payload
+PY
+
+  repo="$TMP_ROOT/smithers-polish-events-invalid"
+  write_valid_issue_repo "$repo" 0
+  mkdir -p "$repo/.smithers/workflows"
+  printf '// fake workflow fixture\n' >"$repo/.smithers/workflows/better-beads-polish-graph.tsx"
+  fake_invalid_bin="$TMP_ROOT/fake-bun-polish-invalid-bin"
+  mkdir -p "$fake_invalid_bin"
+  cat >"$fake_invalid_bin/bunx" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-} ${2:-}" in
+  "smithers-orchestrator up")
+    exit 0
+    ;;
+  "smithers-orchestrator output")
+    printf 'null\n'
+    ;;
+  "smithers-orchestrator inspect")
+    printf '{"status":"completed","nodes":{"synthesize-polish-plan":{"state":"completed"}}}\n'
+    ;;
+  "smithers-orchestrator node")
+    printf '{"output":{"validated":null,"raw":null,"source":"none","cacheKey":null}}\n'
+    ;;
+  "smithers-orchestrator events")
+    cat <<'JSONL'
+{"runId":"fake","seq":1,"type":"NodeOutput","payload":{"nodeId":"synthesize-polish-plan","stream":"stdout","text":"{\"verdict\":\"ready\",\"summary\":\"missing scores\"}"}}
+JSONL
+    ;;
+  "smithers-orchestrator workflow")
+    printf '{"workflowRoot":"/tmp/fake","workflows":[{"id":"better-beads-polish-graph"}],"agents":[]}\n'
+    ;;
+  *)
+    echo "unexpected fake bunx invocation: $*" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$fake_invalid_bin/bunx"
+  run_json_producer_case "$SCHEMA_SMITHERS_POLISH" "smithers-polish-events-invalid" "better-beads smithers polish-graph --json invalid events" \
+    env PATH="$fake_invalid_bin:$FAKE_BIN:/usr/bin:/bin" bash "$SCRIPT_DIR/better-beads" smithers polish-graph --repo "$repo" --request "Fake request" --json
+  python3 - "$TMP_ROOT/smithers-polish-events-invalid.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert payload["result"] is None, payload
+assert payload["result_source"] == "none", payload
+assert payload["result_error"], payload
+assert "could not locate polish result" in payload["error"], payload
+assert payload["output_command"], payload
+assert payload["inspect_command"], payload
+assert payload["node_command"], payload
+assert payload["events_command"], payload
+assert payload["chat_command"], payload
+assert payload["logs_command"], payload
+assert payload["scores_command"], payload
 PY
   mkdir -p "$repo/.smithers/evals"
   cp "$SCRIPT_DIR/../smithers-templates/better-beads-polish-graph.eval.jsonl" "$repo/.smithers/evals/better-beads-polish-graph.eval.jsonl"
