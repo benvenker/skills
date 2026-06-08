@@ -333,7 +333,7 @@ if has_beads:
     blocked_items = normalize_list(records["br_blocked"]["json"])
     bv_payload = records["bv_robot_plan"]["json"]
     plan = bv_payload.get("plan", {}) if isinstance(bv_payload, dict) else {}
-    tracks = plan.get("tracks", []) if isinstance(plan, dict) else []
+    tracks = (plan.get("tracks") or []) if isinstance(plan, dict) else []
     plan_summary = {
         "state": "computed",
         "track_count": len(tracks),
@@ -705,7 +705,7 @@ for issue in active_issues:
         single_owner_warnings.append(summary)
 
 plan = plan_payload.get("plan", {}) if isinstance(plan_payload, dict) else {}
-tracks = plan.get("tracks", []) if isinstance(plan, dict) else []
+tracks = (plan.get("tracks") or []) if isinstance(plan, dict) else []
 
 print(json.dumps({
     "tool": "better-beads",

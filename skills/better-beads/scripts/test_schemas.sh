@@ -460,6 +460,33 @@ run_authoring_tests() {
   write_valid_issue_repo "$repo" 0
   run_json_producer_case "$SCHEMA_AUTHORING" "authoring-triage-graph-present" "better-beads authoring-triage --json" \
     env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/better-beads" authoring-triage --repo "$repo" --json
+
+  # Regression: bv --robot-plan returns plan.tracks:null (fully closed/empty graph)
+  # Must not crash; must emit valid authoring-triage JSON.
+  local null_tracks_bin="$TMP_ROOT/null-tracks-bin"
+  mkdir -p "$null_tracks_bin"
+  cp "$FAKE_BIN/br" "$null_tracks_bin/br"
+  cat >"$null_tracks_bin/bv" <<'NULLBV'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  --robot-plan)
+    echo '{"plan":{"tracks":null,"total_actionable":0,"total_blocked":0,"summary":{"ready":true}}}'
+    ;;
+  --robot-insights)
+    echo '{"insights":[]}'
+    ;;
+  *)
+    echo "unsupported fake bv invocation: $*" >&2
+    exit 2
+    ;;
+esac
+NULLBV
+  chmod +x "$null_tracks_bin/bv"
+  repo="$TMP_ROOT/authoring-null-tracks"
+  write_valid_issue_repo "$repo" 0
+  run_json_producer_case "$SCHEMA_AUTHORING" "authoring-triage-null-tracks" "better-beads authoring-triage --json (null tracks regression)" \
+    env PATH="$null_tracks_bin:$PATH" bash "$SCRIPT_DIR/better-beads" authoring-triage --repo "$repo" --json
 }
 
 run_smithers_tests() {
