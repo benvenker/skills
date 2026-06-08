@@ -42,6 +42,18 @@
     {
       "path": "references/README.md",
       "description": "Reference reading order for authoring, routing, quality, graph construction, and semantic review."
+    },
+    {
+      "path": "references/SMITHERS-POLISH-GRAPH.md",
+      "description": "Optional Smithers-backed strict polish lane for Better Beads graph review."
+    },
+    {
+      "path": "smithers-templates/better-beads-polish-graph.tsx",
+      "description": "Copyable Smithers workflow template for strict Better Beads graph polish review."
+    },
+    {
+      "path": "smithers-templates/better-beads-polish-graph.eval.jsonl",
+      "description": "Copyable Smithers eval case template for the Better Beads strict polish workflow."
     }
   ],
   "scripts": [

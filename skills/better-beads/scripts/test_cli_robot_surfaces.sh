@@ -139,6 +139,45 @@ assert any(
 PY
 }
 
+assert_dispatcher_smithers_surface() {
+  local payload
+  payload="$(cat)"
+  python3 - "$payload" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert any(
+    surface["argv"] == ["smithers", "check", "--json"]
+    and surface["stdout_schema"] == "better-beads-smithers-check-v1"
+    for surface in payload["robot_surfaces"]
+), payload
+assert any(
+    surface["argv"] == ["smithers", "polish-graph", "--json"]
+    and surface["stdout_schema"] == "better-beads-smithers-polish-graph-v1"
+    for surface in payload["robot_surfaces"]
+), payload
+assert any(
+    command.get("name") == "smithers"
+    and any(
+        subcommand.get("name") == "check"
+        and subcommand.get("stdout_schema") == "better-beads-smithers-check-v1"
+        for subcommand in command.get("subcommands", [])
+    )
+    for command in payload["commands"]
+), payload
+assert any(
+    command.get("name") == "smithers"
+    and any(
+        subcommand.get("name") == "polish-graph"
+        and subcommand.get("stdout_schema") == "better-beads-smithers-polish-graph-v1"
+        for subcommand in command.get("subcommands", [])
+    )
+    for command in payload["commands"]
+), payload
+PY
+}
+
 snapshot_tracked_files() {
   python3 - "$REPO_ROOT" <<'PY'
 import hashlib
@@ -208,6 +247,7 @@ bash "$DISPATCHER" capabilities --json | assert_dispatcher_route_surfaces
 bash "$DISPATCHER" capabilities --json | assert_dispatcher_semantic_pack_surface
 bash "$DISPATCHER" capabilities --json | assert_dispatcher_authoring_triage_surface
 bash "$DISPATCHER" capabilities --json | assert_dispatcher_close_continue_surface
+bash "$DISPATCHER" capabilities --json | assert_dispatcher_smithers_surface
 bash "$DISPATCHER" route capabilities --json | assert_route_capabilities_schema_registry
 python3 "$QUALITY" capabilities --json | assert_json_field bead_quality_gate.py
 bash "$LOOP" capabilities --json | assert_json_field bead_gate_loop.sh
@@ -217,6 +257,8 @@ bash "$DISPATCHER" robot-docs guide | grep -q "Better Beads CLI robot guide"
 bash "$DISPATCHER" robot-docs guide | grep -q "authoring-triage"
 bash "$DISPATCHER" robot-docs guide | grep -q "semantic-pack"
 bash "$DISPATCHER" robot-docs guide | grep -q "close-continue"
+bash "$DISPATCHER" robot-docs guide | grep -q "smithers check"
+bash "$DISPATCHER" robot-docs guide | grep -q "smithers polish-graph"
 bash "$DISPATCHER" route robot-docs guide | grep -q "cycle_inspection"
 bash "$DISPATCHER" route robot-docs guide | grep -q "delegates to \`bead_route.sh\`"
 bash "$DISPATCHER" route --robot-help | grep -q "Better Beads route robot guide"
@@ -238,6 +280,14 @@ ROUTE_ERR="$(bash "$DISPATCHER" route --jsno 2>&1 >/dev/null)"
 ROUTE_RC=$?
 AUTHORING_ERR="$(bash "$DISPATCHER" authoring-triage --jsno 2>&1 >/dev/null)"
 AUTHORING_RC=$?
+SMITHERS_ERR="$(bash "$DISPATCHER" smithers check 2>&1 >/dev/null)"
+SMITHERS_RC=$?
+SMITHERS_UNKNOWN_ERR="$(bash "$DISPATCHER" smithers check --jsno 2>&1 >/dev/null)"
+SMITHERS_UNKNOWN_RC=$?
+SMITHERS_POLISH_ERR="$(bash "$DISPATCHER" smithers polish-graph 2>&1 >/dev/null)"
+SMITHERS_POLISH_RC=$?
+SMITHERS_POLISH_APPLY_ERR="$(bash "$DISPATCHER" smithers polish-graph --apply --json 2>&1 >/dev/null)"
+SMITHERS_POLISH_APPLY_RC=$?
 LOOP_ERR="$(bash "$LOOP" --repo . --operator-dispatc 2>&1 >/dev/null)"
 LOOP_RC=$?
 CLOSEOUT_ERR="$(bash "$CLOSEOUT" --repo . --jsno 2>&1 >/dev/null)"
@@ -260,6 +310,21 @@ set -e
 [[ "$AUTHORING_ERR" == *"Did you mean: --json"* ]]
 [[ "$AUTHORING_ERR" == *"Use: better-beads authoring-triage"*"--json"* ]]
 
+[[ "$SMITHERS_RC" -eq 2 ]]
+[[ "$SMITHERS_ERR" == *"smithers check requires --json"* ]]
+[[ "$SMITHERS_ERR" == *"Use: better-beads smithers check"*"--json"* ]]
+
+[[ "$SMITHERS_UNKNOWN_RC" -eq 2 ]]
+[[ "$SMITHERS_UNKNOWN_ERR" == *"Unknown smithers check option: --jsno"* ]]
+[[ "$SMITHERS_UNKNOWN_ERR" == *"Use: better-beads smithers check"*"--json"* ]]
+
+[[ "$SMITHERS_POLISH_RC" -eq 2 ]]
+[[ "$SMITHERS_POLISH_ERR" == *"smithers polish-graph requires --json"* ]]
+[[ "$SMITHERS_POLISH_ERR" == *"Use: better-beads smithers polish-graph"*"--json"* ]]
+
+[[ "$SMITHERS_POLISH_APPLY_RC" -eq 2 ]]
+[[ "$SMITHERS_POLISH_APPLY_ERR" == *"smithers polish-graph is recommendation-only in v1; apply mutations manually through br after review."* ]]
+
 [[ "$LOOP_RC" -eq 2 ]]
 [[ "$LOOP_ERR" == *"Did you mean: --operator-dispatch"* ]]
 [[ "$LOOP_ERR" == *"Corrected command:"*"--repo . --operator-dispatch"* ]]
@@ -279,6 +344,8 @@ assert_read_only_command "better-beads route --json" bash "$DISPATCHER" route --
 assert_read_only_command "better-beads authoring-triage --json" bash "$DISPATCHER" authoring-triage --json
 assert_read_only_command "better-beads triage --json" bash "$DISPATCHER" triage --json
 assert_read_only_command "better-beads semantic-pack --json" bash "$DISPATCHER" semantic-pack --json
+assert_read_only_command "better-beads smithers check --json" bash "$DISPATCHER" smithers check --json
+assert_read_only_command "better-beads smithers polish-graph --json" bash "$DISPATCHER" smithers polish-graph --json
 
 NO_BEADS_REPO="$TMP_REPO/no-beads-route"
 mkdir -p "$NO_BEADS_REPO"
@@ -380,5 +447,15 @@ EOF
   cd "${TMPDIR:-/tmp}"
   bash "$DISPATCHER" semantic-pack --repo "$TMP_REPO" --markdown
 ) | grep -q "Judge prompt"
+
+(
+  cd "${TMPDIR:-/tmp}"
+  PATH="/usr/bin:/bin" bash "$DISPATCHER" smithers check --repo "$TMP_REPO" --json
+) | python3 -c 'import json,sys; payload=json.load(sys.stdin); assert payload["schema"] == "better-beads-smithers-check-v1", payload; assert payload["available"] is False, payload; assert payload["checks"]["bunx"]["available"] is False, payload; assert payload["checks"]["smithers_dir"]["available"] is False, payload; assert payload["checks"]["workflow"]["available"] is False, payload; assert payload["side_effects"]["invokes_bunx"] is False, payload'
+
+(
+  cd "${TMPDIR:-/tmp}"
+  PATH="/usr/bin:/bin" bash "$DISPATCHER" smithers polish-graph --repo "$TMP_REPO" --json
+) | python3 -c 'import json,sys; payload=json.load(sys.stdin); assert payload["schema"] == "better-beads-smithers-polish-graph-v1", payload; assert payload["available"] is False, payload; assert payload["result"] is None, payload; assert payload["run_id"] is None, payload; assert "Smithers unavailable" in payload["error"], payload'
 
 echo "CLI robot surfaces smoke passed."

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-smithers-polish-graph-v1.schema.json",
+  "title": "Better Beads Smithers polish graph v1",
+  "description": "Current JSON output contract for better-beads smithers polish-graph --json. Judge scores are normalized 0-1 Smithers workflow scores, not the manual Better Beads 0-3 rubric.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "schema",
+    "contract_version",
+    "available",
+    "repo",
+    "workflow_path",
+    "run_id",
+    "inspect_command",
+    "output_command",
+    "scores_command",
+    "request",
+    "checks",
+    "missing",
+    "local_inspection",
+    "smithers",
+    "result",
+    "result_error",
+    "error"
+  ],
+  "properties": {
+    "tool": {
+      "const": "better-beads"
+    },
+    "schema": {
+      "const": "better-beads-smithers-polish-graph-v1"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "available": {
+      "type": "boolean"
+    },
+    "repo": {
+      "type": "string"
+    },
+    "workflow_path": {
+      "const": ".smithers/workflows/better-beads-polish-graph.tsx"
+    },
+    "run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "inspect_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "output_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scores_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "request": {
+      "type": "string"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "bunx",
+          "smithers_dir",
+          "workflow"
+        ]
+      }
+    },
+    "local_inspection": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "smithers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "up",
+        "output",
+        "inspect"
+      ],
+      "properties": {
+        "up": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "output": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "inspect": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "result": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "result_error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

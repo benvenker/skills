@@ -4,7 +4,7 @@ set -euo pipefail
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-06"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard close-continue route authoring-triage frontier create-graph semantic-pack triage capabilities robot-docs help)
+KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard close-continue route authoring-triage frontier create-graph semantic-pack smithers triage capabilities robot-docs help)
 
 usage() {
   cat >&2 <<'EOF'
@@ -25,6 +25,9 @@ Commands:
   create-graph --apply F     Apply a reviewed graph draft through br
   semantic-pack --json      Collect graph review artifacts as portable JSON
   semantic-pack --markdown  Collect graph review artifacts as Markdown
+  smithers check --json     Report local Smithers availability without invoking Smithers
+  smithers polish-graph --json
+                            Run optional Smithers polish workflow and return recommendations
   triage --json             Print quick command recommendations as JSON
   capabilities --json       Print machine-readable CLI contract
   robot-docs guide          Print an agent-oriented guide
@@ -40,6 +43,9 @@ Examples:
   better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json
   better-beads semantic-pack --json
   better-beads semantic-pack --markdown
+  better-beads smithers check --json
+  better-beads smithers polish-graph --json
+  better-beads smithers check --repo /tmp --json
   better-beads gate-loop --repo . --operator-dispatch
   better-beads closeout-guard --repo . --json
   better-beads close-continue --id bd-123 --reason "validated" --json
@@ -76,6 +82,8 @@ capabilities_json() {
     {"argv": ["create-graph", "--apply", "PATH"], "stdout_schema": "better-beads-create-graph-apply-v1"},
     {"argv": ["semantic-pack", "--json"], "stdout_schema": "better-beads-semantic-pack-v1"},
     {"argv": ["semantic-pack", "--markdown"], "stdout_schema": "markdown"},
+    {"argv": ["smithers", "check", "--json"], "stdout_schema": "better-beads-smithers-check-v1"},
+    {"argv": ["smithers", "polish-graph", "--json"], "stdout_schema": "better-beads-smithers-polish-graph-v1"},
     {"argv": ["close-continue", "--id", "ID", "--reason", "TEXT", "--json"], "stdout_schema": "better-beads-close-continue-v1"}
   ],
   "commands": [
@@ -88,6 +96,10 @@ capabilities_json() {
     {"name": "frontier", "argv": ["frontier", "--json"], "stdout_schema": "better-beads-frontier-v1"},
     {"name": "create-graph", "delegates_to": "bead_create_graph.py"},
     {"name": "semantic-pack", "argv": ["semantic-pack", "--json"], "stdout_schema": "better-beads-semantic-pack-v1"},
+    {"name": "smithers", "subcommands": [
+      {"name": "check", "argv": ["smithers", "check", "--json"], "stdout_schema": "better-beads-smithers-check-v1"},
+      {"name": "polish-graph", "argv": ["smithers", "polish-graph", "--json"], "stdout_schema": "better-beads-smithers-polish-graph-v1"}
+    ]},
     {"name": "triage", "argv": ["triage", "--json"], "stdout_schema": "better-beads-triage-v1"},
     {"name": "capabilities", "argv": ["capabilities", "--json"], "stdout_schema": "capabilities-v1"},
     {"name": "robot-docs", "argv": ["robot-docs", "guide"], "stdout_schema": "markdown-guide-v1"}
@@ -99,6 +111,8 @@ capabilities_json() {
     "bash $SCRIPT_DIR/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json",
     "bash $SCRIPT_DIR/better-beads semantic-pack --json",
     "bash $SCRIPT_DIR/better-beads semantic-pack --markdown",
+    "bash $SCRIPT_DIR/better-beads smithers check --json",
+    "bash $SCRIPT_DIR/better-beads smithers polish-graph --json",
     "bash $SCRIPT_DIR/better-beads triage --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
@@ -120,6 +134,8 @@ triage_json() {
     "Use frontier to inspect graph-ready work and ready-for-agent label truth.",
     "Use create-graph --dry-run to preview reviewed graph drafts before any br mutation.",
     "Use semantic-pack to collect graph review artifacts for human or oracle review.",
+    "Use smithers check --json to inspect local Smithers prerequisites without running Smithers.",
+    "Use smithers polish-graph --json to collect optional recommendation-only Smithers graph polish.",
     "Use quality-gate for deterministic bead description checks.",
     "Use gate-loop before dispatching implementation agents.",
     "Use closeout-guard before ending implementation/operator swarms.",
@@ -131,6 +147,8 @@ triage_json() {
     "bash $SCRIPT_DIR/better-beads frontier --json",
     "bash $SCRIPT_DIR/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json",
     "bash $SCRIPT_DIR/better-beads semantic-pack --json",
+    "bash $SCRIPT_DIR/better-beads smithers check --json",
+    "bash $SCRIPT_DIR/better-beads smithers polish-graph --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
     "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json",
@@ -141,6 +159,8 @@ triage_json() {
     "authoring-triage": "scripts/better-beads authoring-triage --json",
     "create-graph": "scripts/bead_create_graph.py",
     "semantic-pack": "scripts/better-beads semantic-pack --json",
+    "smithers-check": "scripts/better-beads smithers check --json",
+    "smithers-polish-graph": "scripts/better-beads smithers polish-graph --json",
     "quality-gate": "scripts/bead_quality_gate.py",
     "gate-loop": "scripts/bead_gate_loop.sh",
     "closeout-guard": "scripts/bead_closeout_guard.sh",
@@ -363,6 +383,24 @@ if resolved_plan is not None:
 if quickpack_path:
     next_commands.insert(2, f"Read {quickpack_path}")
 
+selected_mode_payload = {
+    "name": selected_mode,
+    "reference": mode_ref,
+    "quickpack_path": quickpack_path,
+    "reasoning": route_json.get("reasoning"),
+}
+if selected_mode == "polish-existing-graph":
+    selected_mode_payload["smithers_recommendation"] = {
+        "available_check_command": "scripts/better-beads smithers check --json",
+        "recommended": True,
+        "workflow": "better-beads-polish-graph",
+        "command": "scripts/better-beads smithers polish-graph --json",
+        "reason": (
+            "Selected mode is polish-existing-graph; use optional strict-polish lane "
+            "for complex, ambiguous, adversarial, or dispatch-readiness review."
+        ),
+    }
+
 payload = {
     "tool": "better-beads",
     "schema": "better-beads-authoring-triage-v1",
@@ -372,12 +410,7 @@ payload = {
         "plan_path": str(resolved_plan) if resolved_plan is not None else None,
     },
     "route": route_json,
-    "selected_mode": {
-        "name": selected_mode,
-        "reference": mode_ref,
-        "quickpack_path": quickpack_path,
-        "reasoning": route_json.get("reasoning"),
-    },
+    "selected_mode": selected_mode_payload,
     "graph_inspection": {
         "graph_state": graph_state,
         "issue_count": len(issues) if has_beads else graph_state.get("total_beads", 0),
@@ -916,6 +949,428 @@ if inspection_failures:
 PY
 }
 
+smithers_check_json() {
+  python3 - "$CONTRACT_VERSION" "$@" <<'PY'
+from __future__ import annotations
+
+import json
+import shutil
+import sys
+from pathlib import Path
+
+contract_version = sys.argv[1]
+args = sys.argv[2:]
+repo = Path.cwd()
+emit_json = False
+
+
+def usage(message: str | None = None) -> None:
+    if message:
+        print(message, file=sys.stderr)
+    print("Use: better-beads smithers check [--repo PATH] --json", file=sys.stderr)
+    raise SystemExit(2)
+
+
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == "--json":
+        emit_json = True
+        i += 1
+    elif arg == "--repo":
+        if i + 1 >= len(args):
+            usage("--repo requires a path")
+        repo = Path(args[i + 1])
+        i += 2
+    else:
+        usage(f"Unknown smithers check option: {arg}")
+
+if not emit_json:
+    usage("smithers check requires --json")
+
+try:
+    repo = repo.resolve()
+except Exception as exc:
+    usage(f"could not resolve repo path: {exc}")
+
+if not repo.exists():
+    usage(f"repo path does not exist: {repo}")
+if not repo.is_dir():
+    usage(f"repo path is not a directory: {repo}")
+
+bunx_path = shutil.which("bunx")
+smithers_dir = repo / ".smithers"
+workflow_path = smithers_dir / "workflows" / "better-beads-polish-graph.tsx"
+
+checks = {
+    "bunx": {
+        "available": bunx_path is not None,
+        "path": bunx_path,
+        "command": "bunx",
+        "invoked": False,
+    },
+    "smithers_dir": {
+        "available": smithers_dir.is_dir(),
+        "path": str(smithers_dir),
+    },
+    "workflow": {
+        "available": workflow_path.is_file(),
+        "path": str(workflow_path),
+    },
+}
+
+missing = [name for name, check in checks.items() if not check["available"]]
+available = not missing
+setup_hint = (
+    "Smithers prerequisites are present; this command did not invoke Smithers."
+    if available
+    else "Install Bun/bunx and add .smithers/workflows/better-beads-polish-graph.tsx before running Smithers workflows."
+)
+
+payload = {
+    "tool": "better-beads",
+    "schema": "better-beads-smithers-check-v1",
+    "contract_version": contract_version,
+    "command": {
+        "group": "smithers",
+        "name": "check",
+        "argv": ["smithers", "check", "--json"],
+    },
+    "repo": str(repo),
+    "available": available,
+    "checks": checks,
+    "missing": missing,
+    "setup_hint": setup_hint,
+    "side_effects": {
+        "invokes_smithers": False,
+        "invokes_bunx": False,
+        "mutates_repo": False,
+    },
+    "next_commands": [
+        "skills/better-beads/scripts/better-beads smithers check --json",
+    ],
+}
+
+print(json.dumps(payload, indent=2, sort_keys=True))
+PY
+}
+
+smithers_polish_graph_json() {
+  python3 - "$CONTRACT_VERSION" "$SCRIPT_DIR" "$@" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+contract_version = sys.argv[1]
+script_dir = Path(sys.argv[2])
+args = sys.argv[3:]
+repo = Path.cwd()
+emit_json = False
+request = "Polish existing Better Beads graph before implementation dispatch."
+
+
+def usage(message: str | None = None) -> None:
+    if message:
+        print(message, file=sys.stderr)
+    print("Use: better-beads smithers polish-graph [--repo PATH] [--request TEXT] --json", file=sys.stderr)
+    raise SystemExit(2)
+
+
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == "--json":
+        emit_json = True
+        i += 1
+    elif arg == "--repo":
+        if i + 1 >= len(args):
+            usage("--repo requires a path")
+        repo = Path(args[i + 1])
+        i += 2
+    elif arg == "--request":
+        if i + 1 >= len(args):
+            usage("--request requires text")
+        request = args[i + 1]
+        i += 2
+    elif arg == "--apply":
+        print(
+            "smithers polish-graph is recommendation-only in v1; apply mutations manually through br after review.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    else:
+        usage(f"Unknown smithers polish-graph option: {arg}")
+
+if not emit_json:
+    usage("smithers polish-graph requires --json")
+
+try:
+    repo = repo.resolve()
+except Exception as exc:
+    usage(f"could not resolve repo path: {exc}")
+
+if not repo.exists():
+    usage(f"repo path does not exist: {repo}")
+if not repo.is_dir():
+    usage(f"repo path is not a directory: {repo}")
+
+workflow_path = repo / ".smithers" / "workflows" / "better-beads-polish-graph.tsx"
+workflow_arg = ".smithers/workflows/better-beads-polish-graph.tsx"
+
+
+def smithers_checks() -> tuple[bool, dict[str, dict[str, Any]], list[str]]:
+    bunx_path = shutil.which("bunx")
+    checks = {
+        "bunx": {
+            "available": bunx_path is not None,
+            "path": bunx_path,
+            "command": "bunx",
+            "invoked": False,
+        },
+        "smithers_dir": {
+            "available": (repo / ".smithers").is_dir(),
+            "path": str(repo / ".smithers"),
+        },
+        "workflow": {
+            "available": workflow_path.is_file(),
+            "path": str(workflow_path),
+        },
+    }
+    missing = [name for name, check in checks.items() if not check["available"]]
+    return not missing, checks, missing
+
+
+def stderr_snippet(text: str, limit: int = 20) -> str:
+    lines = [line for line in text.strip().splitlines() if line.strip()]
+    return "\n".join(lines[:limit])
+
+
+def parse_json(text: str) -> tuple[Any | None, str | None]:
+    if not text.strip():
+        return None, None
+    try:
+        return json.loads(text), None
+    except Exception as exc:
+        return None, str(exc)
+
+
+def command_record(argv: list[str], *, parse_stdout: bool, actual_argv: list[str] | None = None) -> dict[str, Any]:
+    actual = actual_argv if actual_argv is not None else argv
+    result = subprocess.run(
+        actual,
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    stdout_json, parse_error = parse_json(result.stdout) if parse_stdout else (None, None)
+    record: dict[str, Any] = {
+        "command": argv,
+        "exit_code": result.returncode,
+        "stdout_bytes": len(result.stdout.encode()),
+        "stderr": stderr_snippet(result.stderr),
+    }
+    if parse_stdout:
+        record["stdout_json"] = stdout_json
+        record["parse_error"] = parse_error
+    return record
+
+
+def collect_inspection(name: str, argv: list[str]) -> dict[str, Any]:
+    record = command_record(argv, parse_stdout=True)
+    return record
+
+
+def looks_like_polish_result(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("verdict"), str)
+        and isinstance(value.get("summary"), str)
+        and isinstance(value.get("judge_scores"), dict)
+    )
+
+
+def extract_polish_result(value: Any) -> tuple[dict[str, Any] | None, str | None]:
+    if looks_like_polish_result(value):
+        return value, None
+    if isinstance(value, dict):
+        for key in ("output", "value", "data"):
+            candidate = value.get(key)
+            if looks_like_polish_result(candidate):
+                return candidate, None
+    return None, "could not locate polish result in output row"
+
+
+available, checks, missing = smithers_checks()
+base_payload: dict[str, Any] = {
+    "tool": "better-beads",
+    "schema": "better-beads-smithers-polish-graph-v1",
+    "contract_version": contract_version,
+    "available": available,
+    "repo": str(repo),
+    "workflow_path": workflow_arg,
+    "run_id": None,
+    "inspect_command": None,
+    "output_command": None,
+    "scores_command": None,
+    "request": request,
+    "checks": checks,
+    "missing": missing,
+    "local_inspection": {
+        "authoring_triage": None,
+        "gate_loop": None,
+        "errors": [],
+    },
+    "smithers": {
+        "up": None,
+        "output": None,
+        "inspect": None,
+    },
+    "result": None,
+    "result_error": None,
+    "error": None,
+}
+
+if not available:
+    base_payload["error"] = "Smithers unavailable: bunx missing, .smithers missing, or workflow template not installed."
+    print(json.dumps(base_payload, indent=2, sort_keys=True))
+    raise SystemExit(0)
+
+authoring = collect_inspection(
+    "authoring_triage",
+    ["bash", str(script_dir / "better-beads"), "authoring-triage", "--repo", str(repo), "--json"],
+)
+gate = collect_inspection(
+    "gate_loop",
+    ["bash", str(script_dir / "better-beads"), "gate-loop", "--repo", str(repo), "--operator-dispatch", "--json"],
+)
+inspection_errors = []
+for name, record in (("authoring_triage", authoring), ("gate_loop", gate)):
+    if record["exit_code"] != 0 or record.get("parse_error"):
+        inspection_errors.append(
+            {
+                "name": name,
+                "exit_code": record["exit_code"],
+                "stderr": record["stderr"],
+                "parse_error": record.get("parse_error"),
+                "stdout_bytes": record["stdout_bytes"],
+            }
+        )
+
+local_inspection: dict[str, Any] = {
+    "authoring_triage": authoring,
+    "gate_loop": gate,
+    "errors": inspection_errors,
+}
+
+input_payload: dict[str, Any] = {
+    "request": request,
+    "repo": str(repo),
+    "apply": False,
+    "strict": True,
+    "localInspection": local_inspection,
+}
+input_json = json.dumps(input_payload, separators=(",", ":"), sort_keys=True)
+if len(input_json.encode()) > 900_000:
+    local_inspection = {
+        "truncated": True,
+        "reason": "payload exceeded safe Smithers input size",
+        "original_bytes": len(input_json.encode()),
+        "errors": inspection_errors,
+    }
+    input_payload["localInspection"] = local_inspection
+    input_json = json.dumps(input_payload, separators=(",", ":"), sort_keys=True)
+
+base_payload["local_inspection"] = local_inspection
+
+run_hash = hashlib.sha256(input_json.encode()).hexdigest()[:8]
+timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+run_id = f"better-beads-polish-graph-{timestamp}-{run_hash}"
+output_command = ["bunx", "smithers-orchestrator", "output", run_id, "synthesize-polish-plan", "--json"]
+inspect_command = ["bunx", "smithers-orchestrator", "inspect", run_id, "--format", "json"]
+scores_command = ["bunx", "smithers-orchestrator", "scores", run_id, "--node", "synthesize-polish-plan"]
+up_display_command = [
+    "bunx",
+    "smithers-orchestrator",
+    "up",
+    workflow_arg,
+    "--run-id",
+    run_id,
+    "--input",
+    f"<input_json bytes={len(input_json.encode())} sha256={hashlib.sha256(input_json.encode()).hexdigest()}>",
+]
+up_actual_command = [
+    "bunx",
+    "smithers-orchestrator",
+    "up",
+    workflow_arg,
+    "--run-id",
+    run_id,
+    "--input",
+    input_json,
+]
+
+base_payload["run_id"] = run_id
+base_payload["output_command"] = " ".join(output_command)
+base_payload["inspect_command"] = " ".join(inspect_command)
+base_payload["scores_command"] = " ".join(scores_command)
+
+up_record = command_record(up_display_command, parse_stdout=False, actual_argv=up_actual_command)
+output_record = command_record(output_command, parse_stdout=True)
+inspect_record = command_record(inspect_command, parse_stdout=True)
+
+base_payload["smithers"] = {
+    "up": up_record,
+    "output": output_record,
+    "inspect": inspect_record,
+}
+
+result, result_error = extract_polish_result(output_record.get("stdout_json"))
+if result is None:
+    inspect_result, inspect_error = extract_polish_result(inspect_record.get("stdout_json"))
+    if inspect_result is not None:
+        result = inspect_result
+        result_error = None
+    else:
+        result_error = result_error or inspect_error
+
+diagnostics = []
+if up_record["exit_code"] == 3:
+    diagnostics.append("Smithers up exited 3; run did not complete normally.")
+elif up_record["exit_code"] != 0:
+    diagnostics.append(f"Smithers up exited {up_record['exit_code']}.")
+if output_record["exit_code"] != 0:
+    diagnostics.append(f"Smithers output exited {output_record['exit_code']}.")
+if output_record.get("parse_error"):
+    diagnostics.append(f"Smithers output JSON parse failed: {output_record['parse_error']}.")
+if inspect_record["exit_code"] != 0:
+    diagnostics.append(f"Smithers inspect exited {inspect_record['exit_code']}.")
+if inspect_record.get("parse_error"):
+    diagnostics.append(f"Smithers inspect JSON parse failed: {inspect_record['parse_error']}.")
+if result_error:
+    diagnostics.append(result_error)
+
+base_payload["result"] = result
+base_payload["result_error"] = result_error
+base_payload["error"] = "; ".join(diagnostics) if diagnostics else None
+
+print(json.dumps(base_payload, indent=2, sort_keys=True))
+PY
+}
+
+smithers_usage() {
+  echo "Use: $(basename "$0") smithers (check|polish-graph) [args] --json" >&2
+  exit 2
+}
+
 robot_docs() {
   cat <<'EOF'
 # Better Beads CLI robot guide
@@ -933,6 +1388,8 @@ scripts/better-beads frontier --json
 scripts/better-beads create-graph --dry-run skills/better-beads/test/fixtures/example-graph.json
 scripts/better-beads semantic-pack --json
 scripts/better-beads semantic-pack --markdown
+scripts/better-beads smithers check --json
+scripts/better-beads smithers polish-graph --json
 scripts/better-beads triage --json
 scripts/better-beads quality-gate --repo . --report markdown --fail-on never
 scripts/better-beads gate-loop --repo . --operator-dispatch
@@ -947,6 +1404,8 @@ scripts/better-beads close-continue --id bd-123 --reason validated --json
 - `frontier --json` reports graph-ready beads, blocked beads, ready-label audit results, parent closure blockers, and single-owner surface warnings without mutating labels.
 - `create-graph --dry-run` previews a reviewed graph draft; `create-graph --apply` creates beads and dependencies through `br` after the same preflight.
 - `semantic-pack --json` and `semantic-pack --markdown` collect graph review artifacts and the semantic judge prompt without calling a networked LLM.
+- `smithers check --json` reports local Smithers availability without invoking `bunx` or Smithers.
+- `smithers polish-graph --json` runs the optional Smithers graph polish workflow when available and returns a recommendation-only envelope. It rejects `--apply`; any changes must be applied manually through reviewed `br` commands.
 - `quality-gate` delegates to `bead_quality_gate.py`.
 - `gate-loop` delegates to `bead_gate_loop.sh`.
 - `closeout-guard` delegates to `bead_closeout_guard.sh`.
@@ -964,6 +1423,8 @@ scripts/better-beads close-continue --id bd-123 --reason validated --json
 - `create-graph --dry-run` emits `better-beads-create-graph-preview-v1`; invalid references, cycles, duplicate titles, and blocked ready labels exit `2`.
 - `create-graph --apply` emits `better-beads-create-graph-apply-v1`; if a `br` mutation fails, the payload includes recovery evidence.
 - `semantic-pack --json` emits `better-beads-semantic-pack-v1`; gate failures are included as review blockers.
+- `smithers check --json` emits `better-beads-smithers-check-v1` and is read-only.
+- `smithers polish-graph --json` emits `better-beads-smithers-polish-graph-v1`; it may invoke Smithers only after `smithers check` prerequisites pass and never runs `scores`.
 - Usage errors go to stderr and exit `2`.
 - Delegated commands preserve the underlying command's exit code.
 EOF
@@ -1060,6 +1521,18 @@ case "$cmd" in
   semantic-pack)
     shift
     semantic_pack "$@"
+    ;;
+  smithers)
+    shift
+    if [[ "${1:-}" == "check" ]]; then
+      shift
+      smithers_check_json "$@"
+    elif [[ "${1:-}" == "polish-graph" ]]; then
+      shift
+      smithers_polish_graph_json "$@"
+    else
+      smithers_usage
+    fi
     ;;
   quality-gate)
     shift

@@ -11,14 +11,14 @@ printf 'Leaving Better Beads schema test temp root at %s\n' "$TMP_ROOT" >&2
 
 usage() {
   cat >&2 <<'EOF'
-Usage: test_schemas.sh [route|dispatch|quality|authoring-triage|telemetry]
+Usage: test_schemas.sh [route|dispatch|quality|authoring-triage|smithers|telemetry]
 
 Validates Better Beads JSON schemas using only bash and python3 stdlib.
 EOF
 }
 
 case "${1:-all}" in
-  all|route|dispatch|quality|authoring-triage|telemetry)
+  all|route|dispatch|quality|authoring-triage|smithers|telemetry)
     TARGET="${1:-all}"
     ;;
   -h|--help)
@@ -35,6 +35,8 @@ SCHEMA_ROUTE="$SCHEMA_DIR/better-beads-route-v1.schema.json"
 SCHEMA_DISPATCH="$SCHEMA_DIR/better-beads-dispatch-verdict-v1.schema.json"
 SCHEMA_QUALITY="$SCHEMA_DIR/better-beads-quality-gate-v1.schema.json"
 SCHEMA_AUTHORING="$SCHEMA_DIR/better-beads-authoring-triage-v1.schema.json"
+SCHEMA_SMITHERS="$SCHEMA_DIR/better-beads-smithers-check-v1.schema.json"
+SCHEMA_SMITHERS_POLISH="$SCHEMA_DIR/better-beads-smithers-polish-graph-v1.schema.json"
 SCHEMA_TELEMETRY="$SCHEMA_DIR/better-beads-telemetry-v1.schema.json"
 FAKE_BIN="$TMP_ROOT/bin"
 mkdir -p "$FAKE_BIN"
@@ -460,6 +462,197 @@ run_authoring_tests() {
     env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT_DIR/better-beads" authoring-triage --repo "$repo" --json
 }
 
+run_smithers_tests() {
+  local repo payload fake_bun_bin marker scores_marker calls_log eval_stdout eval_stderr
+
+  repo="$TMP_ROOT/smithers-unavailable"
+  mkdir -p "$repo"
+  payload="$TMP_ROOT/smithers-unavailable.json"
+  run_json_producer_case "$SCHEMA_SMITHERS" "smithers-unavailable" "better-beads smithers check --json" \
+    env PATH="/usr/bin:/bin" bash "$SCRIPT_DIR/better-beads" smithers check --repo "$repo" --json
+  python3 - "$TMP_ROOT/smithers-unavailable.json" "$repo" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo = Path(sys.argv[2]).resolve()
+assert payload["repo"] == str(repo), payload
+assert payload["available"] is False, payload
+assert payload["checks"]["bunx"]["available"] is False, payload
+assert payload["checks"]["bunx"]["path"] is None, payload
+assert payload["checks"]["smithers_dir"]["available"] is False, payload
+assert payload["checks"]["workflow"]["available"] is False, payload
+assert set(payload["missing"]) == {"bunx", "smithers_dir", "workflow"}, payload
+assert payload["side_effects"]["invokes_smithers"] is False, payload
+assert payload["side_effects"]["invokes_bunx"] is False, payload
+PY
+
+  repo="$TMP_ROOT/smithers-available"
+  fake_bun_bin="$TMP_ROOT/fake-bun-bin"
+  marker="$TMP_ROOT/bunx-invoked"
+  mkdir -p "$repo/.smithers/workflows" "$fake_bun_bin"
+  printf '// schema fixture only\n' >"$repo/.smithers/workflows/better-beads-polish-graph.tsx"
+  cat >"$fake_bun_bin/bunx" <<EOF
+#!/usr/bin/env bash
+printf invoked >"$marker"
+exit 99
+EOF
+  chmod +x "$fake_bun_bin/bunx"
+  run_json_producer_case "$SCHEMA_SMITHERS" "smithers-available" "better-beads smithers check --json" \
+    env PATH="$fake_bun_bin:/usr/bin:/bin" bash "$SCRIPT_DIR/better-beads" smithers check --repo "$repo" --json
+  if [[ -e "$marker" ]]; then
+    echo "smithers check invoked bunx unexpectedly" >&2
+    exit 1
+  fi
+  python3 - "$TMP_ROOT/smithers-available.json" "$repo" "$fake_bun_bin/bunx" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo = Path(sys.argv[2]).resolve()
+bunx = Path(sys.argv[3]).resolve()
+assert payload["repo"] == str(repo), payload
+assert payload["available"] is True, payload
+assert payload["checks"]["bunx"]["available"] is True, payload
+assert Path(payload["checks"]["bunx"]["path"]).resolve() == bunx, payload
+assert payload["checks"]["bunx"]["invoked"] is False, payload
+assert payload["checks"]["smithers_dir"]["available"] is True, payload
+assert payload["checks"]["workflow"]["available"] is True, payload
+assert payload["missing"] == [], payload
+assert payload["side_effects"]["invokes_smithers"] is False, payload
+assert payload["side_effects"]["invokes_bunx"] is False, payload
+PY
+
+  repo="$TMP_ROOT/smithers-polish-unavailable"
+  mkdir -p "$repo"
+  run_json_producer_case "$SCHEMA_SMITHERS_POLISH" "smithers-polish-unavailable" "better-beads smithers polish-graph --json" \
+    env PATH="/usr/bin:/bin" bash "$SCRIPT_DIR/better-beads" smithers polish-graph --repo "$repo" --json
+  python3 - "$TMP_ROOT/smithers-polish-unavailable.json" "$repo" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo = Path(sys.argv[2]).resolve()
+assert payload["repo"] == str(repo), payload
+assert payload["schema"] == "better-beads-smithers-polish-graph-v1", payload
+assert payload["available"] is False, payload
+assert payload["result"] is None, payload
+assert payload["run_id"] is None, payload
+assert payload["error"] == "Smithers unavailable: bunx missing, .smithers missing, or workflow template not installed.", payload
+assert set(payload["missing"]) == {"bunx", "smithers_dir", "workflow"}, payload
+PY
+
+  repo="$TMP_ROOT/smithers-polish-ready"
+  write_valid_issue_repo "$repo" 0
+  mkdir -p "$repo/.smithers/workflows"
+  printf '// fake workflow fixture\n' >"$repo/.smithers/workflows/better-beads-polish-graph.tsx"
+  fake_bun_bin="$TMP_ROOT/fake-bun-polish-bin"
+  scores_marker="$TMP_ROOT/scores-invoked"
+  calls_log="$TMP_ROOT/fake-bun-polish-calls.log"
+  mkdir -p "$fake_bun_bin"
+  cat >"$fake_bun_bin/bunx" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$calls_log"
+case "\${1:-} \${2:-}" in
+  "smithers-orchestrator up")
+    exit 0
+    ;;
+  "smithers-orchestrator output")
+    cat <<'JSON'
+{"output":{"verdict":"ready","summary":"Fake Smithers says graph is ready.","recommended_mutations":[],"ready_frontier":["42"],"blocked_dispatch_reasons":[],"judge_scores":{"behavior_contract_quality":0.9,"implementation_fungibility":0.9,"dependency_correctness":0.9,"reviewability":0.9,"dispatch_readiness":0.9}}}
+JSON
+    ;;
+  "smithers-orchestrator inspect")
+    cat <<'JSON'
+{"status":"completed","nodes":{"synthesize-polish-plan":{"state":"completed"}}}
+JSON
+    ;;
+  "smithers-orchestrator eval")
+    case " \$* " in
+      *" --dry-run "*) ;;
+      *)
+        echo "expected eval --dry-run" >&2
+        exit 2
+        ;;
+    esac
+    test -f ".smithers/workflows/better-beads-polish-graph.tsx"
+    test -f ".smithers/evals/better-beads-polish-graph.eval.jsonl"
+    printf '{"suite":"better-beads-polish-smoke","dry_run":true,"case_count":3}\n'
+    ;;
+  "smithers-orchestrator scores")
+    printf invoked >"$scores_marker"
+    exit 99
+    ;;
+  *)
+    echo "unexpected fake bunx invocation: \$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$fake_bun_bin/bunx"
+  run_json_producer_case "$SCHEMA_SMITHERS_POLISH" "smithers-polish-ready" "better-beads smithers polish-graph --json" \
+    env PATH="$fake_bun_bin:$FAKE_BIN:/usr/bin:/bin" bash "$SCRIPT_DIR/better-beads" smithers polish-graph --repo "$repo" --request "Fake request" --json
+  if [[ -e "$scores_marker" ]]; then
+    echo "smithers polish-graph invoked scores unexpectedly" >&2
+    exit 1
+  fi
+  python3 - "$TMP_ROOT/smithers-polish-ready.json" "$repo" "$calls_log" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo = Path(sys.argv[2]).resolve()
+calls = Path(sys.argv[3]).read_text(encoding="utf-8")
+assert payload["repo"] == str(repo), payload
+assert payload["available"] is True, payload
+assert payload["request"] == "Fake request", payload
+assert payload["result"]["verdict"] == "ready", payload
+assert payload["result"]["summary"] == "Fake Smithers says graph is ready.", payload
+assert payload["smithers"]["up"]["exit_code"] == 0, payload
+assert payload["smithers"]["output"]["exit_code"] == 0, payload
+assert payload["smithers"]["inspect"]["exit_code"] == 0, payload
+assert payload["smithers"]["output"]["parse_error"] is None, payload
+assert payload["scores_command"], payload
+assert "scores" not in calls, calls
+assert "smithers-orchestrator up" in calls, calls
+assert "smithers-orchestrator output" in calls, calls
+assert "smithers-orchestrator inspect" in calls, calls
+PY
+  mkdir -p "$repo/.smithers/evals"
+  cp "$SCRIPT_DIR/../smithers-templates/better-beads-polish-graph.eval.jsonl" "$repo/.smithers/evals/better-beads-polish-graph.eval.jsonl"
+  eval_stdout="$TMP_ROOT/smithers-polish-eval-dry-run.stdout"
+  eval_stderr="$TMP_ROOT/smithers-polish-eval-dry-run.stderr"
+  (
+    cd "$repo"
+    PATH="$fake_bun_bin:/usr/bin:/bin" bunx smithers-orchestrator eval .smithers/workflows/better-beads-polish-graph.tsx \
+      --cases .smithers/evals/better-beads-polish-graph.eval.jsonl \
+      --suite better-beads-polish-smoke \
+      --dry-run
+  ) >"$eval_stdout" 2>"$eval_stderr"
+  python3 - "$eval_stdout" "$calls_log" "$repo/.smithers/evals/better-beads-polish-graph.eval.jsonl" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+calls = Path(sys.argv[2]).read_text(encoding="utf-8")
+cases = [json.loads(line) for line in Path(sys.argv[3]).read_text(encoding="utf-8").splitlines() if line.strip()]
+assert payload["dry_run"] is True, payload
+assert payload["case_count"] == 3, payload
+assert "smithers-orchestrator eval" in calls, calls
+assert "--dry-run" in calls, calls
+assert len(cases) == 3, cases
+assert {"id", "input", "expected", "annotations"} <= set(cases[0]), cases[0]
+assert cases[0]["expected"]["outputContains"]["polishPlan"]["verdict"] == "ready", cases[0]
+assert cases[1]["expected"]["outputContains"]["polishPlan"]["verdict"] == "needs_mutation", cases[1]
+PY
+}
+
 run_telemetry_tests() {
   local repo event_log payload
 
@@ -514,6 +707,10 @@ fi
 
 if [[ "$TARGET" == "authoring-triage" || "$TARGET" == "all" ]]; then
   run_authoring_tests
+fi
+
+if [[ "$TARGET" == "smithers" || "$TARGET" == "all" ]]; then
+  run_smithers_tests
 fi
 
 if [[ "$TARGET" == "telemetry" || "$TARGET" == "all" ]]; then

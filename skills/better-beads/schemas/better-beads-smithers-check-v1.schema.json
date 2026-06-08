@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/better-beads/schemas/better-beads-smithers-check-v1.schema.json",
+  "title": "Better Beads Smithers availability check v1",
+  "description": "Current JSON output contract for better-beads smithers check --json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "schema",
+    "contract_version",
+    "command",
+    "repo",
+    "available",
+    "checks",
+    "missing",
+    "setup_hint",
+    "side_effects",
+    "next_commands"
+  ],
+  "properties": {
+    "tool": {
+      "const": "better-beads"
+    },
+    "schema": {
+      "const": "better-beads-smithers-check-v1"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group",
+        "name",
+        "argv"
+      ],
+      "properties": {
+        "group": {
+          "const": "smithers"
+        },
+        "name": {
+          "const": "check"
+        },
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "repo": {
+      "type": "string"
+    },
+    "available": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bunx",
+        "smithers_dir",
+        "workflow"
+      ],
+      "properties": {
+        "bunx": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "path",
+            "command",
+            "invoked"
+          ],
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "command": {
+              "const": "bunx"
+            },
+            "invoked": {
+              "const": false
+            }
+          }
+        },
+        "smithers_dir": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "path"
+          ],
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "workflow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "path"
+          ],
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "bunx",
+          "smithers_dir",
+          "workflow"
+        ]
+      }
+    },
+    "setup_hint": {
+      "type": "string"
+    },
+    "side_effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invokes_smithers",
+        "invokes_bunx",
+        "mutates_repo"
+      ],
+      "properties": {
+        "invokes_smithers": {
+          "const": false
+        },
+        "invokes_bunx": {
+          "const": false
+        },
+        "mutates_repo": {
+          "const": false
+        }
+      }
+    },
+    "next_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
