@@ -98,9 +98,9 @@ const reviewer = new PiAgent({
   model,
   cwd: process.cwd(),
   noSession: true,
-  noTools: true,
+  tools: ["read", "grep"],
   noExtensions: true,
-  noSkills: true,
+  skill: ["better-beads"],
 });
 
 const synthesizer = new PiAgent({
@@ -108,9 +108,9 @@ const synthesizer = new PiAgent({
   model,
   cwd: process.cwd(),
   noSession: true,
-  noTools: true,
+  tools: ["read", "grep"],
   noExtensions: true,
-  noSkills: true,
+  skill: ["better-beads"],
 });
 
 export default smithers((ctx) => {
@@ -144,7 +144,10 @@ export default smithers((ctx) => {
             validation, grounding, and closure evidence. Recommend only graph
             or Bead-contract changes. Do not mutate Beads. Do not produce
             implementation code. If apply is true, treat it as out of scope and
-            continue recommendation-only review.
+            continue recommendation-only review. Use the Better Beads skill and
+            read-only repo inspection where useful. You may read and grep files
+            for context, but you must not run shell commands, edit files, mutate
+            Beads, close issues, commit, push, or implement any Bead.
             {"\n\n"}
             Return only JSON matching the reviewer finding schema with reviewer
             set to "behavior-contract".
@@ -166,7 +169,10 @@ export default smithers((ctx) => {
             recommendations that make each Bead executable by a fungible coding
             agent without hidden context. Do not mutate Beads. Do not produce
             implementation code. If apply is true, treat it as out of scope and
-            continue recommendation-only review.
+            continue recommendation-only review. Use the Better Beads skill and
+            read-only repo inspection where useful. You may read and grep files
+            for context, but you must not run shell commands, edit files, mutate
+            Beads, close issues, commit, push, or implement any Bead.
             {"\n\n"}
             Return only JSON matching the reviewer finding schema with reviewer
             set to "implementation-agent".
@@ -188,6 +194,10 @@ export default smithers((ctx) => {
             parallelism. Prefer graph-shape fixes over prose churn. Do not
             mutate Beads. Do not produce implementation code. If apply is true,
             treat it as out of scope and continue recommendation-only review.
+            Use the Better Beads skill and read-only repo inspection where
+            useful. You may read and grep files for context, but you must not
+            run shell commands, edit files, mutate Beads, close issues, commit,
+            push, or implement any Bead.
             {"\n\n"}
             Return only JSON matching the reviewer finding schema with reviewer
             set to "dependency-reviewability".
@@ -240,6 +250,11 @@ export default smithers((ctx) => {
               changes. Do not produce implementation code. If reviewer findings
               disagree, synthesize a verdict of ready, needs_mutation, or
               blocked with concrete reasons.
+              {"\n\n"}
+              Use the Better Beads skill and read-only repo inspection where
+              useful. You may read and grep files for context, but you must not
+              run shell commands, edit files, mutate Beads, close issues,
+              commit, push, or implement any Bead.
               {"\n\n"}
               Return only JSON matching the polish plan schema. Judge scores
               must be numbers from 0 to 1.

@@ -67,11 +67,21 @@ synthesize-polish-plan
 
 The workflow result is a recommendation, not an applied graph mutation. Review any suggested command or mutation before using `br`.
 
-In the current v1 template, reviewer and synthesis `PiAgent`s set
-`noTools`, `noExtensions`, and `noSkills` so live polish runs cannot edit source
-files, mutate Beads, close issues, commit, or push through PI's default tool
-surface. Future applying polish should use a typed Beads mutation task or custom
-tool that allows only reviewed `br update`, dependency, and label mutations.
+In the current v1 template, reviewer and synthesis `PiAgent`s load the
+`better-beads` skill and allow only PI's read-only built-ins:
+
+```ts
+tools: ["read", "grep"]
+skill: ["better-beads"]
+noExtensions: true
+```
+
+The workflow does not allow PI's `write`, `edit`, or `bash` built-ins, so live
+polish runs can inspect repo context and Better Beads references without editing
+source files, mutating Beads, closing issues, committing, pushing, or
+implementing Beads. Future applying polish should use a typed Beads mutation task
+or custom tool that allows only reviewed `br update`, dependency, and label
+mutations.
 
 ## Scores
 
