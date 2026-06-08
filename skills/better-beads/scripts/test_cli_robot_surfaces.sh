@@ -118,6 +118,27 @@ assert any(
 PY
 }
 
+assert_dispatcher_close_continue_surface() {
+  local payload
+  payload="$(cat)"
+  python3 - "$payload" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert any(
+    surface["argv"] == ["close-continue", "--id", "ID", "--reason", "TEXT", "--json"]
+    and surface["stdout_schema"] == "better-beads-close-continue-v1"
+    for surface in payload["robot_surfaces"]
+), payload
+assert any(
+    command.get("name") == "close-continue"
+    and command.get("delegates_to") == "bead_close_continue.py"
+    for command in payload["commands"]
+), payload
+PY
+}
+
 snapshot_tracked_files() {
   python3 - "$REPO_ROOT" <<'PY'
 import hashlib
@@ -186,6 +207,7 @@ bash "$DISPATCHER" capabilities --json | assert_json_field better-beads
 bash "$DISPATCHER" capabilities --json | assert_dispatcher_route_surfaces
 bash "$DISPATCHER" capabilities --json | assert_dispatcher_semantic_pack_surface
 bash "$DISPATCHER" capabilities --json | assert_dispatcher_authoring_triage_surface
+bash "$DISPATCHER" capabilities --json | assert_dispatcher_close_continue_surface
 bash "$DISPATCHER" route capabilities --json | assert_route_capabilities_schema_registry
 python3 "$QUALITY" capabilities --json | assert_json_field bead_quality_gate.py
 bash "$LOOP" capabilities --json | assert_json_field bead_gate_loop.sh
@@ -194,12 +216,15 @@ bash "$CLOSEOUT" capabilities --json | assert_json_field bead_closeout_guard.sh
 bash "$DISPATCHER" robot-docs guide | grep -q "Better Beads CLI robot guide"
 bash "$DISPATCHER" robot-docs guide | grep -q "authoring-triage"
 bash "$DISPATCHER" robot-docs guide | grep -q "semantic-pack"
+bash "$DISPATCHER" robot-docs guide | grep -q "close-continue"
 bash "$DISPATCHER" route robot-docs guide | grep -q "cycle_inspection"
 bash "$DISPATCHER" route robot-docs guide | grep -q "delegates to \`bead_route.sh\`"
 bash "$DISPATCHER" route --robot-help | grep -q "Better Beads route robot guide"
 bash "$DISPATCHER" triage --json | python3 -c 'import json,sys; payload=json.load(sys.stdin); assert payload["schema"] == "better-beads-triage-v1", payload; [(_ for _ in ()).throw(AssertionError(command)) for command in payload["recommended_commands"] if sys.argv[1] not in command]' "$DISPATCHER"
 bash "$DISPATCHER" triage --json | python3 -c 'import json,sys; payload=json.load(sys.stdin); assert any("route --json" in command for command in payload["recommended_commands"]), payload'
+bash "$DISPATCHER" triage --json | python3 -c 'import json,sys; payload=json.load(sys.stdin); assert any("close-continue" in command for command in payload["recommended_commands"]), payload'
 bash "$DISPATCHER" authoring-triage --json | python3 -c 'import json,sys; payload=json.load(sys.stdin); assert payload["schema"] == "better-beads-authoring-triage-v1", payload; assert payload["mutation_eligibility"]["authoring_triage_is_read_only"] is True, payload'
+bash "$DISPATCHER" close-continue --self-test | python3 -c 'import json,sys; lines=sys.stdin.read().splitlines(); assert lines[0] == "self-test OK", lines; payload=json.loads("\n".join(lines[1:])); assert payload["unblock"]["suggested_next_id"], payload; assert payload["unblock"]["must_continue"] is True, payload; assert payload["queue_dry"]["queue_dry"] is True, payload'
 python3 "$QUALITY" robot-docs guide | grep -q "Better Beads quality gate robot guide"
 bash "$LOOP" robot-docs guide | grep -q "Better Beads gate loop robot guide"
 bash "$CLOSEOUT" robot-docs guide | grep -q "Better Beads closeout guard robot guide"

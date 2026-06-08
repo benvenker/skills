@@ -3,11 +3,16 @@ set -euo pipefail
 
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-05"
-KNOWN_FLAGS=(--repo --all --changed-staged --changed-since --operator-dispatch --strict --json --version --robot-help -h --help)
+KNOWN_FLAGS=(--repo --all --changed-staged --changed-since --operator-dispatch --strict --json --telemetry --version --robot-help -h --help)
+START_MS="$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)"
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bead_gate_loop.sh [--repo PATH] [--all | --changed-staged | --changed-since REF | --operator-dispatch] [--strict] [--json]
+Usage: bead_gate_loop.sh [--repo PATH] [--all | --changed-staged | --changed-since REF | --operator-dispatch] [--strict] [--json] [--telemetry PATH]
        bead_gate_loop.sh capabilities --json
        bead_gate_loop.sh robot-docs guide
 
@@ -24,12 +29,15 @@ Modes:
   --strict              fail on warnings as well as errors
   --json                emit the dispatch verdict JSON on stdout; human status
                         and repair prompts move to stderr
+  --telemetry PATH      Append one Better Beads telemetry JSONL event for this
+                        outer gate-loop run
   --version             print version and exit
   --robot-help          print an agent-oriented guide and exit
 
 Examples:
   bead_gate_loop.sh --repo . --changed-staged
   bead_gate_loop.sh --repo . --operator-dispatch --strict
+  bead_gate_loop.sh --repo . --operator-dispatch --telemetry /tmp/better-beads.jsonl
   bead_gate_loop.sh capabilities --json
   bead_gate_loop.sh robot-docs guide
 
@@ -83,6 +91,7 @@ capabilities_json() {
   "examples": [
     "bead_gate_loop.sh --repo . --operator-dispatch",
     "bead_gate_loop.sh --repo . --operator-dispatch --json",
+    "bead_gate_loop.sh --repo . --operator-dispatch --telemetry /tmp/better-beads.jsonl",
     "bead_gate_loop.sh --repo . --changed-since HEAD --strict",
     "bead_gate_loop.sh capabilities --json"
   ]
@@ -103,6 +112,7 @@ Beads quality checks, dependency-cycle inspection, BV robot plan, and BV robot i
 scripts/bead_gate_loop.sh capabilities --json
 scripts/bead_gate_loop.sh --repo . --operator-dispatch
 scripts/bead_gate_loop.sh --repo . --operator-dispatch --json
+scripts/bead_gate_loop.sh --repo . --operator-dispatch --telemetry /tmp/better-beads.jsonl
 scripts/bead_gate_loop.sh --repo . --changed-staged --strict
 ```
 
@@ -111,6 +121,8 @@ scripts/bead_gate_loop.sh --repo . --changed-staged --strict
 - Human stdout names artifact paths, including the dispatch verdict JSON.
 - With `--json`, stdout is one `better-beads-dispatch-verdict-v1` JSON object.
 - With `--json`, human status and repair prompts move to stderr or artifacts.
+- With `--telemetry PATH`, the loop appends one outer run event and does not
+  pass telemetry flags to `bead_quality_gate.py`.
 - Diagnostics and usage errors go to stderr.
 - Exit `0` means dispatch/gate criteria passed.
 - Exit `2` means usage, tooling, parse/schema, cycle, or deterministic gate failure.
@@ -195,6 +207,7 @@ CHANGED_SINCE=""
 STRICT=0
 OPERATOR_DISPATCH=0
 JSON_OUTPUT=0
+TELEMETRY_PATH=""
 
 while (($#)); do
   case "$1" in
@@ -233,6 +246,11 @@ while (($#)); do
       JSON_OUTPUT=1
       shift
       ;;
+    --telemetry)
+      [[ -n "${2:-}" ]] || { echo "--telemetry requires a path" >&2; exit 2; }
+      TELEMETRY_PATH="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -246,6 +264,7 @@ done
 REPO="$(cd "$REPO" && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QUALITY_GATE="$SCRIPT_DIR/bead_quality_gate.py"
+TELEMETRY_HELPER="$SCRIPT_DIR/better_beads_telemetry.py"
 
 if [[ ! -x "$QUALITY_GATE" ]]; then
   echo "Missing executable quality gate: $QUALITY_GATE" >&2
@@ -257,7 +276,7 @@ if [[ ! -d "$REPO/.beads" ]]; then
   exit 2
 fi
 
-ARTIFACT_DIR="${TMPDIR:-/tmp}/bead-quality-gate-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+ARTIFACT_DIR="${BEAD_GATE_LOOP_ARTIFACT_DIR:-${TMPDIR:-/tmp}/bead-quality-gate-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 mkdir -p "$ARTIFACT_DIR"
 
 FAIL_ON="error"
@@ -279,6 +298,52 @@ esac
 if (( OPERATOR_DISPATCH == 1 )); then
   QUALITY_ARGS+=(--operator-dispatch)
 fi
+
+emit_loop_telemetry() {
+  local exit_code="$1"
+  local verdict="$2"
+  if [[ -z "$TELEMETRY_PATH" ]]; then
+    return 0
+  fi
+  if [[ ! -r "$TELEMETRY_HELPER" ]]; then
+    echo "better-beads telemetry warning: helper missing or unreadable: $TELEMETRY_HELPER" >&2
+    return 0
+  fi
+  local duration_ms
+  duration_ms="$(python3 - "$START_MS" <<'PY'
+import sys, time
+start = int(sys.argv[1])
+print(max(0, int(time.time() * 1000) - start))
+PY
+)"
+  local counts_json
+  counts_json="$(python3 - "$VERDICT_JSON" <<'PY'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    counts = data.get("finding_counts") or {}
+except Exception:
+    counts = {}
+print(json.dumps(counts, sort_keys=True, separators=(",", ":")))
+PY
+)"
+  local telemetry_stderr
+  if ! telemetry_stderr="$(python3 "$TELEMETRY_HELPER" \
+    --emit "$TELEMETRY_PATH" \
+    --tool "bead_gate_loop.sh" \
+    --tool-version "$VERSION" \
+    --contract-version "$CONTRACT_VERSION" \
+    --mode "$MODE" \
+    --repo "$REPO" \
+    --duration-ms "$duration_ms" \
+    --exit-code "$exit_code" \
+    --verdict "$verdict" \
+    --finding-counts "$counts_json" 2>&1 >/dev/null)"; then
+    echo "better-beads telemetry warning: helper failed: $telemetry_stderr" >&2
+  elif [[ -n "$telemetry_stderr" ]]; then
+    echo "$telemetry_stderr" >&2
+  fi
+}
 
 GATE_JSON="$ARTIFACT_DIR/bead-quality-gate.json"
 CYCLES_JSON="$ARTIFACT_DIR/br-dep-cycles.json"
@@ -645,6 +710,7 @@ if (( BLOCKED == 1 )); then
     echo "Bead quality gate BLOCKED. Fix prompt: $PROMPT_MD" >&2
   fi
   sed -n '1,140p' "$PROMPT_MD" >&2
+  emit_loop_telemetry 2 fail
   exit 2
 fi
 
@@ -661,4 +727,5 @@ else
     echo "Bead quality gate passed. Artifacts: $ARTIFACT_DIR"
   fi
 fi
+emit_loop_telemetry 0 pass
 exit 0

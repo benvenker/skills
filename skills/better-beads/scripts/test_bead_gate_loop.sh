@@ -164,6 +164,32 @@ assert "Operator dispatch gate passed" in stderr, stderr
 assert "Operator dispatch gate passed" not in sys.argv[1], payload
 PY
 
+TELEMETRY_PATH="$TMP_ROOT/gate-loop-telemetry.jsonl"
+TELEMETRY_ARTIFACT_DIR="$TMP_ROOT/telemetry-artifacts"
+TELEMETRY_BASE_STDOUT="$(BEAD_GATE_LOOP_ARTIFACT_DIR="$TELEMETRY_ARTIFACT_DIR" PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$PASS_REPO" --operator-dispatch 2>"$TMP_ROOT/telemetry-base.stderr")"
+TELEMETRY_WITH_STDOUT="$(BEAD_GATE_LOOP_ARTIFACT_DIR="$TELEMETRY_ARTIFACT_DIR" PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$PASS_REPO" --operator-dispatch --telemetry "$TELEMETRY_PATH" 2>"$TMP_ROOT/telemetry-with.stderr")"
+[[ "$TELEMETRY_WITH_STDOUT" == "$TELEMETRY_BASE_STDOUT" ]]
+python3 - "$TELEMETRY_PATH" <<'PY'
+import json
+import sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+assert len(lines) == 1, lines
+event = json.loads(lines[0])
+assert event["tool"] == "bead_gate_loop.sh", event
+assert event["mode"] == "operator-dispatch", event
+assert event["exit_code"] == 0, event
+assert event["verdict"] == "pass", event
+assert event["schema_version"] == "better-beads-telemetry-v1", event
+assert event["finding_counts"]["deterministic_errors"] == 0, event
+PY
+
+TELEMETRY_WARNING_ARTIFACT_DIR="$TMP_ROOT/telemetry-warning-artifacts"
+TELEMETRY_WARNING_BASE_STDOUT="$(BEAD_GATE_LOOP_ARTIFACT_DIR="$TELEMETRY_WARNING_ARTIFACT_DIR" PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$PASS_REPO" --operator-dispatch 2>"$TMP_ROOT/telemetry-warning-base.stderr")"
+TELEMETRY_WARNING_STDOUT="$(BEAD_GATE_LOOP_ARTIFACT_DIR="$TELEMETRY_WARNING_ARTIFACT_DIR" PATH="$FAKE_BIN:$PATH" "$LOOP" --repo "$PASS_REPO" --operator-dispatch --telemetry "$PASS_REPO" 2>"$TMP_ROOT/telemetry-warning.stderr")"
+[[ "$TELEMETRY_WARNING_STDOUT" == "$TELEMETRY_WARNING_BASE_STDOUT" ]]
+grep -q "better-beads telemetry warning:" "$TMP_ROOT/telemetry-warning.stderr"
+
 BLOCK_REPO="$TMP_ROOT/block-repo"
 write_repo "$BLOCK_REPO" 1
 set +e

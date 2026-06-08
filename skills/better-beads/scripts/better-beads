@@ -4,7 +4,7 @@ set -euo pipefail
 VERSION="1.0.0"
 CONTRACT_VERSION="2026-06-06"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard route authoring-triage frontier create-graph semantic-pack triage capabilities robot-docs help)
+KNOWN_COMMANDS=(quality-gate gate-loop closeout-guard close-continue route authoring-triage frontier create-graph semantic-pack triage capabilities robot-docs help)
 
 usage() {
   cat >&2 <<'EOF'
@@ -17,6 +17,8 @@ Commands:
   quality-gate [args]       Run bead_quality_gate.py with args
   gate-loop [args]          Run bead_gate_loop.sh with args
   closeout-guard [args]     Run bead_closeout_guard.sh with args
+  close-continue --id ID --reason R --json
+                            Close one bead and report whether ready work remains
   authoring-triage --json   Print the first read-only authoring packet
   frontier --json           Show graph-ready work, blocked work, and ready-label truth
   create-graph --dry-run F   Preview safe graph creation from a reviewed draft
@@ -40,6 +42,7 @@ Examples:
   better-beads semantic-pack --markdown
   better-beads gate-loop --repo . --operator-dispatch
   better-beads closeout-guard --repo . --json
+  better-beads close-continue --id bd-123 --reason "validated" --json
 
 Exit codes:
   0  command succeeded
@@ -72,13 +75,15 @@ capabilities_json() {
     {"argv": ["create-graph", "--dry-run", "PATH"], "stdout_schema": "better-beads-create-graph-preview-v1"},
     {"argv": ["create-graph", "--apply", "PATH"], "stdout_schema": "better-beads-create-graph-apply-v1"},
     {"argv": ["semantic-pack", "--json"], "stdout_schema": "better-beads-semantic-pack-v1"},
-    {"argv": ["semantic-pack", "--markdown"], "stdout_schema": "markdown"}
+    {"argv": ["semantic-pack", "--markdown"], "stdout_schema": "markdown"},
+    {"argv": ["close-continue", "--id", "ID", "--reason", "TEXT", "--json"], "stdout_schema": "better-beads-close-continue-v1"}
   ],
   "commands": [
     {"name": "route", "delegates_to": "bead_route.sh"},
     {"name": "quality-gate", "delegates_to": "bead_quality_gate.py"},
     {"name": "gate-loop", "delegates_to": "bead_gate_loop.sh"},
     {"name": "closeout-guard", "delegates_to": "bead_closeout_guard.sh"},
+    {"name": "close-continue", "delegates_to": "bead_close_continue.py", "stdout_schema": "better-beads-close-continue-v1"},
     {"name": "authoring-triage", "argv": ["authoring-triage", "--json"], "stdout_schema": "better-beads-authoring-triage-v1"},
     {"name": "frontier", "argv": ["frontier", "--json"], "stdout_schema": "better-beads-frontier-v1"},
     {"name": "create-graph", "delegates_to": "bead_create_graph.py"},
@@ -97,7 +102,8 @@ capabilities_json() {
     "bash $SCRIPT_DIR/better-beads triage --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
-    "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json"
+    "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json",
+    "bash $SCRIPT_DIR/better-beads close-continue --id bd-123 --reason validated --json"
   ]
 }
 EOF
@@ -116,7 +122,8 @@ triage_json() {
     "Use semantic-pack to collect graph review artifacts for human or oracle review.",
     "Use quality-gate for deterministic bead description checks.",
     "Use gate-loop before dispatching implementation agents.",
-    "Use closeout-guard before ending implementation/operator swarms."
+    "Use closeout-guard before ending implementation/operator swarms.",
+    "Use close-continue after closing a bead to detect newly ready follow-up work."
   ],
   "recommended_commands": [
     "bash $SCRIPT_DIR/better-beads route --json",
@@ -126,7 +133,8 @@ triage_json() {
     "bash $SCRIPT_DIR/better-beads semantic-pack --json",
     "bash $SCRIPT_DIR/better-beads quality-gate --repo . --report markdown --fail-on never",
     "bash $SCRIPT_DIR/better-beads gate-loop --repo . --operator-dispatch",
-    "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json"
+    "bash $SCRIPT_DIR/better-beads closeout-guard --repo . --json",
+    "bash $SCRIPT_DIR/better-beads close-continue --id bd-123 --reason validated --json"
   ],
   "delegates": {
     "route": "scripts/bead_route.sh",
@@ -135,7 +143,8 @@ triage_json() {
     "semantic-pack": "scripts/better-beads semantic-pack --json",
     "quality-gate": "scripts/bead_quality_gate.py",
     "gate-loop": "scripts/bead_gate_loop.sh",
-    "closeout-guard": "scripts/bead_closeout_guard.sh"
+    "closeout-guard": "scripts/bead_closeout_guard.sh",
+    "close-continue": "scripts/bead_close_continue.py"
   }
 }
 EOF
@@ -928,6 +937,7 @@ scripts/better-beads triage --json
 scripts/better-beads quality-gate --repo . --report markdown --fail-on never
 scripts/better-beads gate-loop --repo . --operator-dispatch
 scripts/better-beads closeout-guard --repo . --json
+scripts/better-beads close-continue --id bd-123 --reason validated --json
 ```
 
 ## Command map
@@ -940,6 +950,9 @@ scripts/better-beads closeout-guard --repo . --json
 - `quality-gate` delegates to `bead_quality_gate.py`.
 - `gate-loop` delegates to `bead_gate_loop.sh`.
 - `closeout-guard` delegates to `bead_closeout_guard.sh`.
+- `close-continue` delegates to `bead_close_continue.py`; it closes one bead,
+  runs `br sync --flush-only`, and reports whether more ready or in-progress
+  work prevents queue-dry.
 - `triage --json` returns quick reference plus recommended next commands.
 
 ## Output contract
@@ -1059,6 +1072,10 @@ case "$cmd" in
   closeout-guard)
     shift
     exec bash "$SCRIPT_DIR/bead_closeout_guard.sh" "$@"
+    ;;
+  close-continue)
+    shift
+    exec python3 "$SCRIPT_DIR/bead_close_continue.py" "$@"
     ;;
   *)
     shift || true
