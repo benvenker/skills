@@ -253,6 +253,24 @@ br close <id1> <id2>  # Close multiple issues at once
 br sync --flush-only  # Export to JSONL (NO git operations)
 ```
 
+### Shell Quoting Rule for Beads Text
+
+Never pass multiline Markdown, backticks, `$()`, quotes, or generated model text
+directly inside a shell-quoted `br create --description` or
+`br update --description` argument. Shell interpolation will eventually corrupt a
+Bead.
+
+- Prefer structured/file-oriented `br` surfaces where they exist, such as
+  `br create --file` for bulk creation and `br comments add --file` for comments.
+- For updating descriptions until `br update` has `--description-file` or JSON
+  input, pass the description as a single argv value from a subprocess API
+  rather than interpolating it in shell text.
+- If a shell must be used, only use a single-quoted heredoc captured as one
+  variable and immediately verify with `br show <id> --json`. Do not put the
+  Markdown body directly in a double-quoted command.
+- When probing `br` write-command behavior, use a scratch Beads repo, not the
+  live project graph.
+
 ### Key Concepts
 
 - **Dependencies**: Issues can block other issues. `br ready` shows only unblocked work.
