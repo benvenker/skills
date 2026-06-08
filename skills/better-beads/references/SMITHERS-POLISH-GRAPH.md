@@ -67,6 +67,12 @@ synthesize-polish-plan
 
 The workflow result is a recommendation, not an applied graph mutation. Review any suggested command or mutation before using `br`.
 
+In the current v1 template, reviewer and synthesis `PiAgent`s set
+`noTools`, `noExtensions`, and `noSkills` so live polish runs cannot edit source
+files, mutate Beads, close issues, commit, or push through PI's default tool
+surface. Future applying polish should use a typed Beads mutation task or custom
+tool that allows only reviewed `br update`, dependency, and label mutations.
+
 ## Scores
 
 For a completed polish run, inspect Smithers scores directly:

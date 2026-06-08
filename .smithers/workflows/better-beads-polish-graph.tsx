@@ -98,6 +98,9 @@ const reviewer = new PiAgent({
   model,
   cwd: process.cwd(),
   noSession: true,
+  noTools: true,
+  noExtensions: true,
+  noSkills: true,
 });
 
 const synthesizer = new PiAgent({
@@ -105,6 +108,9 @@ const synthesizer = new PiAgent({
   model,
   cwd: process.cwd(),
   noSession: true,
+  noTools: true,
+  noExtensions: true,
+  noSkills: true,
 });
 
 export default smithers((ctx) => {
